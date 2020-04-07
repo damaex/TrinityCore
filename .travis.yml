@@ -3,6 +3,10 @@ dist: bionic
 language: cpp
 compiler:
   - clang
+  
+arch:
+  - amd64
+  - arm64
 
 git:
   depth: 1
