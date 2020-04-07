@@ -17,7 +17,7 @@ addons:
       - sourceline: 'ppa:mhier/libboost-latest'
 #     - sourceline: 'ubuntu-toolchain-r-test'
     packages:
-      - boost1.67
+      - libboost-dev
       - libssl-dev
       - libmysqlclient-dev
       - libreadline6-dev
