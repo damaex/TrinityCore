@@ -5392,6 +5392,14 @@ enum DiminishingLevels
     DIMINISHING_LEVEL_TAUNT_IMMUNE  = 4
 };
 
+enum WeaponAttackType : uint8
+{
+    BASE_ATTACK   = 0,
+    OFF_ATTACK    = 1,
+    RANGED_ATTACK = 2,
+    MAX_ATTACK
+};
+
 enum TokenResult
 {
     TOKEN_RESULT_SUCCESS                        = 0,
@@ -6506,6 +6514,21 @@ enum class GameError : uint32
     ERR_ITEM_INTERACTION_NOT_ENOUGH_CURRENCY                        = 1045,
     ERR_CANT_USE_PROFANITY                                          = 1046,
     ERR_NOT_IN_PET_BATTLE                                           = 1047,
+};
+
+enum class MountResult : uint32
+{
+    InvalidMountee = 0,
+    TooFarAway     = 1,
+    AlreadyMounted = 2,
+    NotMountable   = 3,
+    NotYourPet     = 4,
+    Other          = 5,
+    Looting        = 6,
+    RaceCantMount  = 7,
+    Shapeshifted   = 8,
+    ForcedDismount = 9,
+    Ok             = 10 // never sent
 };
 
 #endif
