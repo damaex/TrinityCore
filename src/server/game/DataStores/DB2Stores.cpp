@@ -421,8 +421,6 @@ namespace
     SpecializationSpellsContainer _specializationSpellsBySpec;
     std::unordered_set<std::pair<int32, uint32>> _specsBySpecSet;
     std::unordered_set<uint8> _spellFamilyNames;
-    SpellPowerContainer _spellPowers;
-    SpellPowerDifficultyContainer _spellPowerDifficulties;
     SpellProcsPerMinuteModContainer _spellProcsPerMinuteMods;
     TalentsByPosition _talentsByPosition;
     ToyItemIdsContainer _toys;
@@ -780,6 +778,7 @@ void DB2Manager::LoadStores(std::string const& dataPath, uint32 defaultLocale)
     LOAD_DB2(sWMOAreaTableStore);
     LOAD_DB2(sWorldEffectStore);
     LOAD_DB2(sWorldMapOverlayStore);
+    LOAD_DB2(sWorldStateExpressionStore);
 
 #undef LOAD_DB2
 
@@ -1139,26 +1138,6 @@ void DB2Manager::LoadStores(std::string const& dataPath, uint32 defaultLocale)
     for (SpellClassOptionsEntry const* classOption : sSpellClassOptionsStore)
         _spellFamilyNames.insert(classOption->SpellClassSet);
 
-    for (SpellPowerEntry const* power : sSpellPowerStore)
-    {
-        if (SpellPowerDifficultyEntry const* powerDifficulty = sSpellPowerDifficultyStore.LookupEntry(power->ID))
-        {
-            std::vector<SpellPowerEntry const*>& powers = _spellPowerDifficulties[power->SpellID][powerDifficulty->DifficultyID];
-            if (powers.size() <= powerDifficulty->OrderIndex)
-                powers.resize(powerDifficulty->OrderIndex + 1);
-
-            powers[powerDifficulty->OrderIndex] = power;
-        }
-        else
-        {
-            std::vector<SpellPowerEntry const*>& powers = _spellPowers[power->SpellID];
-            if (powers.size() <= power->OrderIndex)
-                powers.resize(power->OrderIndex + 1);
-
-            powers[power->OrderIndex] = power;
-        }
-    }
-
     for (SpellProcsPerMinuteModEntry const* ppmMod : sSpellProcsPerMinuteModStore)
         _spellProcsPerMinuteMods[ppmMod->SpellProcsPerMinuteID].push_back(ppmMod);
 
@@ -1407,9 +1386,9 @@ void DB2Manager::LoadHotfixData()
         uint32 tableHash = fields[1].GetUInt32();
         int32 recordId = fields[2].GetInt32();
         bool deleted = fields[3].GetBool();
-        if (_stores.find(tableHash) == _stores.end() && _hotfixBlob.find(std::make_pair(tableHash, recordId)) == _hotfixBlob.end())
+        if (!deleted && _stores.find(tableHash) == _stores.end() && _hotfixBlob.find(std::make_pair(tableHash, recordId)) == _hotfixBlob.end())
         {
-            TC_LOG_ERROR("sql.sql", "Table `hotfix_data` references unknown DB2 store by hash 0x%X and has no reference to `hotfix_blob` in hotfix id %d", tableHash, id);
+            TC_LOG_ERROR("sql.sql", "Table `hotfix_data` references unknown DB2 store by hash 0x%X and has no reference to `hotfix_blob` in hotfix id %d with RecordID: %d", tableHash, id, recordId);
             continue;
         }
 
@@ -2624,48 +2603,6 @@ bool DB2Manager::IsSpecSetMember(int32 specSetId, uint32 specId) const
 bool DB2Manager::IsValidSpellFamiliyName(SpellFamilyNames family)
 {
     return _spellFamilyNames.count(family) > 0;
-}
-
-std::vector<SpellPowerEntry const*> DB2Manager::GetSpellPowers(uint32 spellId, Difficulty difficulty /*= DIFFICULTY_NONE*/, bool* hasDifficultyPowers /*= nullptr*/) const
-{
-    std::vector<SpellPowerEntry const*> powers;
-
-    auto difficultyItr = _spellPowerDifficulties.find(spellId);
-    if (difficultyItr != _spellPowerDifficulties.end())
-    {
-        if (hasDifficultyPowers)
-            *hasDifficultyPowers = true;
-
-        DifficultyEntry const* difficultyEntry = sDifficultyStore.LookupEntry(difficulty);
-        while (difficultyEntry)
-        {
-            auto powerDifficultyItr = difficultyItr->second.find(difficultyEntry->ID);
-            if (powerDifficultyItr != difficultyItr->second.end())
-            {
-                if (powerDifficultyItr->second.size() > powers.size())
-                    powers.resize(powerDifficultyItr->second.size());
-
-                for (SpellPowerEntry const* difficultyPower : powerDifficultyItr->second)
-                    if (!powers[difficultyPower->OrderIndex])
-                        powers[difficultyPower->OrderIndex] = difficultyPower;
-            }
-
-            difficultyEntry = sDifficultyStore.LookupEntry(difficultyEntry->FallbackDifficultyID);
-        }
-    }
-
-    auto itr = _spellPowers.find(spellId);
-    if (itr != _spellPowers.end())
-    {
-        if (itr->second.size() > powers.size())
-            powers.resize(itr->second.size());
-
-        for (SpellPowerEntry const* power : itr->second)
-            if (!powers[power->OrderIndex])
-                powers[power->OrderIndex] = power;
-    }
-
-    return powers;
 }
 
 std::vector<SpellProcsPerMinuteModEntry const*> DB2Manager::GetSpellProcsPerMinuteMods(uint32 spellprocsPerMinuteId) const
