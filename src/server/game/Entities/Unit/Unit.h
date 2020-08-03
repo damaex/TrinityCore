@@ -185,6 +185,7 @@ enum InventorySlot
 };
 
 struct FactionTemplateEntry;
+struct LiquidData;
 struct LiquidTypeEntry;
 struct MountCapabilityEntry;
 struct SpellValue;
@@ -212,6 +213,10 @@ class UnitAI;
 class UnitAura;
 class Vehicle;
 class VehicleJoinEvent;
+
+enum class PetActionFeedback : uint8;
+enum ZLiquidStatus : uint32;
+
 namespace Movement
 {
     class MoveSpline;
@@ -1294,7 +1299,6 @@ class TC_GAME_API Unit : public WorldObject
 
         virtual bool IsInWater() const;
         virtual bool IsUnderWater() const;
-        virtual void UpdateUnderwaterState(Map* m, float x, float y, float z);
         bool isInAccessiblePlaceFor(Creature const* c) const;
 
         void SendHealSpellLog(HealInfo& healInfo, bool critical = false);
@@ -1909,8 +1913,8 @@ class TC_GAME_API Unit : public WorldObject
         void SetControlled(bool apply, UnitState state);
 
         ///----------Pet responses methods-----------------
-        void SendPetActionFeedback (uint8 msg);
-        void SendPetTalk (uint32 pettalk);
+        void SendPetActionFeedback(PetActionFeedback msg, uint32 spellId);
+        void SendPetTalk(uint32 pettalk);
         void SendPetAIReaction(ObjectGuid guid);
         ///----------End of Pet responses methods----------
 
@@ -2109,6 +2113,9 @@ class TC_GAME_API Unit : public WorldObject
         bool IsAlwaysDetectableFor(WorldObject const* seer) const override;
 
         void DisableSpline();
+
+        void ProcessPositionDataChanged(PositionFullTerrainStatus const& data) override;
+        virtual void ProcessTerrainStatusUpdate(ZLiquidStatus status, Optional<LiquidData> const& liquidData);
 
     private:
 

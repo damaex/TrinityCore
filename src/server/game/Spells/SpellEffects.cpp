@@ -252,7 +252,7 @@ NonDefaultConstructible<pEffect> SpellEffects[TOTAL_SPELL_EFFECTS] =
     &Spell::EffectNULL,                                     //171 SPELL_EFFECT_171
     &Spell::EffectResurrectWithAura,                        //172 SPELL_EFFECT_RESURRECT_WITH_AURA
     &Spell::EffectUnlockGuildVaultTab,                      //173 SPELL_EFFECT_UNLOCK_GUILD_VAULT_TAB
-    &Spell::EffectNULL,                                     //174 SPELL_EFFECT_APPLY_AURA_ON_PET
+    &Spell::EffectApplyAura,                                //174 SPELL_EFFECT_APPLY_AURA_ON_PET
     &Spell::EffectUnused,                                   //175 SPELL_EFFECT_175  unused
     &Spell::EffectSanctuary,                                //176 SPELL_EFFECT_SANCTUARY_2
     &Spell::EffectNULL,                                     //177 SPELL_EFFECT_177
@@ -280,7 +280,7 @@ NonDefaultConstructible<pEffect> SpellEffects[TOTAL_SPELL_EFFECTS] =
     &Spell::EffectNULL,                                     //199 SPELL_EFFECT_199
     &Spell::EffectHealBattlePetPct,                         //200 SPELL_EFFECT_HEAL_BATTLEPET_PCT
     &Spell::EffectEnableBattlePets,                         //201 SPELL_EFFECT_ENABLE_BATTLE_PETS
-    &Spell::EffectNULL,                                     //202 SPELL_EFFECT_202
+    &Spell::EffectApplyAura,                                //202 SPELL_EFFECT_202
     &Spell::EffectNULL,                                     //203 SPELL_EFFECT_203
     &Spell::EffectNULL,                                     //204 SPELL_EFFECT_CHANGE_BATTLEPET_QUALITY
     &Spell::EffectLaunchQuestChoice,                        //205 SPELL_EFFECT_LAUNCH_QUEST_CHOICE
@@ -349,7 +349,7 @@ NonDefaultConstructible<pEffect> SpellEffects[TOTAL_SPELL_EFFECTS] =
     &Spell::EffectNULL,                                     //268 SPELL_EFFECT_APPLY_MOUNT_EQUIPMENT
     &Spell::EffectNULL,                                     //269 SPELL_EFFECT_UPGRADE_ITEM
     &Spell::EffectNULL,                                     //270 SPELL_EFFECT_270
-    &Spell::EffectNULL,                                     //271 SPELL_EFFECT_APPLY_AREA_AURA_PARTY_NONRANDOM
+    &Spell::EffectApplyAreaAura,                            //271 SPELL_EFFECT_APPLY_AREA_AURA_PARTY_NONRANDOM
 };
 
 void Spell::EffectNULL(SpellEffIndex /*effIndex*/)
@@ -1602,7 +1602,7 @@ void Spell::SendLoot(ObjectGuid guid, LootType loottype)
         }
 
         player->PlayerTalkClass->ClearMenus();
-        if (gameObjTarget->AI()->GossipHello(player, false))
+        if (gameObjTarget->AI()->GossipHello(player))
             return;
 
         switch (gameObjTarget->GetGoType())
@@ -3345,24 +3345,6 @@ void Spell::EffectScriptEffect(SpellEffIndex effIndex)
 
                     return;
                 }
-                case 58983: // Big Blizzard Bear
-                {
-                    if (!unitTarget || unitTarget->GetTypeId() != TYPEID_PLAYER)
-                        return;
-
-                    // Prevent stacking of mounts and client crashes upon dismounting
-                    unitTarget->RemoveAurasByType(SPELL_AURA_MOUNTED);
-
-                    // Triggered spell id dependent on riding skill
-                    if (uint16 skillval = unitTarget->ToPlayer()->GetSkillValue(SKILL_RIDING))
-                    {
-                        if (skillval >= 150)
-                            unitTarget->CastSpell(unitTarget, 58999, true);
-                        else
-                            unitTarget->CastSpell(unitTarget, 58997, true);
-                    }
-                    return;
-                }
                 case 59317:                                 // Teleporting
                 {
 
@@ -4201,7 +4183,7 @@ void Spell::EffectCharge(SpellEffIndex /*effIndex*/)
             spellEffectExtraData->SpellVisualId = effectInfo->MiscValueB;
         }
         // Spell is not using explicit target - no generated path
-        if (m_preGeneratedPath->GetPathType() == PATHFIND_BLANK)
+        if (!m_preGeneratedPath)
         {
             //unitTarget->GetContactPoint(m_caster, pos.m_positionX, pos.m_positionY, pos.m_positionZ);
             Position pos = unitTarget->GetFirstCollisionPosition(unitTarget->GetCombatReach(), unitTarget->GetRelativeAngle(m_caster));
@@ -4262,9 +4244,10 @@ void Spell::EffectKnockBack(SpellEffIndex /*effIndex*/)
     if (!unitTarget)
         return;
 
-    if (Creature* creatureTarget = unitTarget->ToCreature())
-        if (creatureTarget->isWorldBoss() || creatureTarget->IsDungeonBoss())
-            return;
+    if (m_caster->GetTypeId() == TYPEID_PLAYER || m_caster->GetOwnerGUID().IsPlayer() || m_caster->IsHunterPet())
+        if (Creature* creatureTarget = unitTarget->ToCreature())
+            if (creatureTarget->isWorldBoss() || creatureTarget->IsDungeonBoss())
+                return;
 
     // Spells with SPELL_EFFECT_KNOCK_BACK (like Thunderstorm) can't knockback target if target has ROOT/STUN
     if (unitTarget->HasUnitState(UNIT_STATE_ROOT | UNIT_STATE_STUNNED))

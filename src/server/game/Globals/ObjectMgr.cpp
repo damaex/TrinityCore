@@ -336,7 +336,7 @@ void ObjectMgr::LoadCreatureLocales()
         std::string localeName  = fields[1].GetString();
 
         LocaleConstant locale = GetLocaleByName(localeName);
-        if (locale == LOCALE_enUS)
+        if (!IsValidLocale(locale) || locale == LOCALE_enUS)
             continue;
 
         CreatureLocale& data = _creatureLocaleStore[id];
@@ -371,7 +371,7 @@ void ObjectMgr::LoadGossipMenuItemsLocales()
         std::string localeName  = fields[2].GetString();
 
         LocaleConstant locale   = GetLocaleByName(localeName);
-        if (locale == LOCALE_enUS)
+        if (!IsValidLocale(locale) || locale == LOCALE_enUS)
             continue;
 
         GossipMenuItemsLocale& data = _gossipMenuItemsLocaleStore[std::make_pair(menuId, optionIndex)];
@@ -401,7 +401,7 @@ void ObjectMgr::LoadPointOfInterestLocales()
         std::string localeName  = fields[1].GetString();
 
         LocaleConstant locale = GetLocaleByName(localeName);
-        if (locale == LOCALE_enUS)
+        if (!IsValidLocale(locale) || locale == LOCALE_enUS)
             continue;
 
         PointOfInterestLocale& data = _pointOfInterestLocaleStore[id];
@@ -2187,7 +2187,7 @@ void ObjectMgr::RemoveCreatureFromGrid(ObjectGuid::LowType guid, CreatureData co
     }
 }
 
-ObjectGuid::LowType ObjectMgr::AddGOData(uint32 entry, uint32 mapId, float x, float y, float z, float o, uint32 spawntimedelay, float rotation0, float rotation1, float rotation2, float rotation3)
+ObjectGuid::LowType ObjectMgr::AddGOData(uint32 entry, uint32 mapId, Position const& pos, QuaternionData const& rot, uint32 spawntimedelay /*= 0*/)
 {
     GameObjectTemplate const* goinfo = GetGameObjectTemplate(entry);
     if (!goinfo)
@@ -2201,14 +2201,10 @@ ObjectGuid::LowType ObjectMgr::AddGOData(uint32 entry, uint32 mapId, float x, fl
     GameObjectData& data = NewGOData(guid);
     data.id             = entry;
     data.mapid          = mapId;
-    data.posX           = x;
-    data.posY           = y;
-    data.posZ           = z;
-    data.orientation    = o;
-    data.rotation.x     = rotation0;
-    data.rotation.y     = rotation1;
-    data.rotation.z     = rotation2;
-    data.rotation.w     = rotation3;
+
+    pos.GetPosition(data.posX, data.posY, data.posZ, data.orientation);
+
+    data.rotation       = rot;
     data.spawntimesecs  = spawntimedelay;
     data.animprogress   = 100;
     data.spawnDifficulties.push_back(DIFFICULTY_NONE);
@@ -2220,7 +2216,7 @@ ObjectGuid::LowType ObjectMgr::AddGOData(uint32 entry, uint32 mapId, float x, fl
 
     // Spawn if necessary (loaded grids only)
     // We use spawn coords to spawn
-    if (!map->Instanceable() && map->IsGridLoaded(x, y))
+    if (!map->Instanceable() && map->IsGridLoaded(data.posX, data.posY))
     {
         GameObject* go = GameObject::CreateGameObjectFromDB(guid, map);
         if (!go)
@@ -2230,12 +2226,12 @@ ObjectGuid::LowType ObjectMgr::AddGOData(uint32 entry, uint32 mapId, float x, fl
         }
     }
 
-    TC_LOG_DEBUG("maps", "AddGOData: dbguid " UI64FMTD " entry %u map %u x %f y %f z %f o %f", guid, entry, mapId, x, y, z, o);
+    TC_LOG_DEBUG("maps", "AddGOData: dbguid " UI64FMTD " entry %u map %u x %f y %f z %f o %f", guid, entry, mapId, data.posX, data.posY, data.posZ, data.orientation);
 
     return guid;
 }
 
-ObjectGuid::LowType ObjectMgr::AddCreatureData(uint32 entry, uint32 mapId, float x, float y, float z, float o, uint32 spawntimedelay /*= 0*/)
+ObjectGuid::LowType ObjectMgr::AddCreatureData(uint32 entry, uint32 mapId, Position const& pos, uint32 spawntimedelay /*= 0*/)
 {
     CreatureTemplate const* cInfo = GetCreatureTemplate(entry);
     if (!cInfo)
@@ -2256,10 +2252,9 @@ ObjectGuid::LowType ObjectMgr::AddCreatureData(uint32 entry, uint32 mapId, float
     data.mapid = mapId;
     data.displayid = 0;
     data.equipmentId = 0;
-    data.posX = x;
-    data.posY = y;
-    data.posZ = z;
-    data.orientation = o;
+
+    pos.GetPosition(data.posX, data.posY, data.posZ, data.orientation);
+
     data.spawntimesecs = spawntimedelay;
     data.spawndist = 0;
     data.currentwaypoint = 0;
@@ -2275,7 +2270,7 @@ ObjectGuid::LowType ObjectMgr::AddCreatureData(uint32 entry, uint32 mapId, float
     AddCreatureToGrid(guid, &data);
 
     // We use spawn coords to spawn
-    if (!map->Instanceable() && !map->IsRemovalGrid(x, y))
+    if (!map->Instanceable() && !map->IsRemovalGrid(data.posX, data.posY))
     {
         Creature* creature = Creature::CreateCreatureFromDB(guid, map);
         if (!creature)
@@ -4758,7 +4753,7 @@ void ObjectMgr::LoadQuestTemplateLocale()
         std::string localeName          = fields[1].GetString();
 
         LocaleConstant locale = GetLocaleByName(localeName);
-        if (locale == LOCALE_enUS)
+        if (!IsValidLocale(locale) || locale == LOCALE_enUS)
             continue;
 
         QuestTemplateLocale& data = _questTemplateLocaleStore[id];
@@ -4794,7 +4789,7 @@ void ObjectMgr::LoadQuestObjectivesLocale()
         std::string localeName              = fields[1].GetString();
 
         LocaleConstant locale = GetLocaleByName(localeName);
-        if (locale == LOCALE_enUS)
+        if (!IsValidLocale(locale) || locale == LOCALE_enUS)
             continue;
 
         QuestObjectivesLocale& data = _questObjectivesLocaleStore[id];
@@ -4847,7 +4842,7 @@ void ObjectMgr::LoadQuestGreetingLocales()
         std::string localeName = fields[2].GetString();
 
         LocaleConstant locale = GetLocaleByName(localeName);
-        if (locale == LOCALE_enUS)
+        if (!IsValidLocale(locale) || locale == LOCALE_enUS)
             continue;
 
         QuestGreetingLocale& data = _questGreetingLocaleStore[type][id];
@@ -4877,7 +4872,7 @@ void ObjectMgr::LoadQuestOfferRewardLocale()
         std::string localeName = fields[1].GetString();
 
         LocaleConstant locale = GetLocaleByName(localeName);
-        if (locale == LOCALE_enUS)
+        if (!IsValidLocale(locale) || locale == LOCALE_enUS)
             continue;
 
         QuestOfferRewardLocale& data = _questOfferRewardLocaleStore[id];
@@ -4905,7 +4900,7 @@ void ObjectMgr::LoadQuestRequestItemsLocale()
         std::string localeName = fields[1].GetString();
 
         LocaleConstant locale = GetLocaleByName(localeName);
-        if (locale == LOCALE_enUS)
+        if (!IsValidLocale(locale) || locale == LOCALE_enUS)
             continue;
 
         QuestRequestItemsLocale& data = _questRequestItemsLocaleStore[id];
@@ -5545,7 +5540,7 @@ void ObjectMgr::LoadPageTextLocales()
         std::string localeName      = fields[1].GetString();
 
         LocaleConstant locale = GetLocaleByName(localeName);
-        if (locale == LOCALE_enUS)
+        if (!IsValidLocale(locale) || locale == LOCALE_enUS)
             continue;
 
         PageTextLocale& data = _pageTextLocaleStore[id];
@@ -5636,7 +5631,7 @@ void ObjectMgr::LoadInstanceEncounters()
         if (lastEncounterDungeon && !sLFGMgr->GetLFGDungeonEntry(lastEncounterDungeon))
         {
             TC_LOG_ERROR("sql.sql", "Table `instance_encounters` has an encounter %u (%s) marked as final for invalid dungeon id %u, skipped!",
-                entry, dungeonEncounter->Name->Str[sWorld->GetDefaultDbcLocale()], lastEncounterDungeon);
+                entry, dungeonEncounter->Name[sWorld->GetDefaultDbcLocale()], lastEncounterDungeon);
             continue;
         }
 
@@ -5646,7 +5641,7 @@ void ObjectMgr::LoadInstanceEncounters()
             if (itr != dungeonLastBosses.end())
             {
                 TC_LOG_ERROR("sql.sql", "Table `instance_encounters` specified encounter %u (%s) as last encounter but %u (%s) is already marked as one, skipped!",
-                    entry, dungeonEncounter->Name->Str[sWorld->GetDefaultDbcLocale()], itr->second.first, itr->second.second->Name->Str[sWorld->GetDefaultDbcLocale()]);
+                    entry, dungeonEncounter->Name[sWorld->GetDefaultDbcLocale()], itr->second.first, itr->second.second->Name[sWorld->GetDefaultDbcLocale()]);
                 continue;
             }
 
@@ -5661,7 +5656,7 @@ void ObjectMgr::LoadInstanceEncounters()
                 if (!creatureInfo)
                 {
                     TC_LOG_ERROR("sql.sql", "Table `instance_encounters` has an invalid creature (entry %u) linked to the encounter %u (%s), skipped!",
-                        creditEntry, entry, dungeonEncounter->Name->Str[sWorld->GetDefaultDbcLocale()]);
+                        creditEntry, entry, dungeonEncounter->Name[sWorld->GetDefaultDbcLocale()]);
                     continue;
                 }
                 const_cast<CreatureTemplate*>(creatureInfo)->flags_extra |= CREATURE_FLAG_EXTRA_DUNGEON_BOSS;
@@ -5679,13 +5674,13 @@ void ObjectMgr::LoadInstanceEncounters()
                 if (!sSpellMgr->GetSpellInfo(creditEntry, DIFFICULTY_NONE))
                 {
                     TC_LOG_ERROR("sql.sql", "Table `instance_encounters` has an invalid spell (entry %u) linked to the encounter %u (%s), skipped!",
-                        creditEntry, entry, dungeonEncounter->Name->Str[sWorld->GetDefaultDbcLocale()]);
+                        creditEntry, entry, dungeonEncounter->Name[sWorld->GetDefaultDbcLocale()]);
                     continue;
                 }
                 break;
             default:
                 TC_LOG_ERROR("sql.sql", "Table `instance_encounters` has an invalid credit type (%u) for encounter %u (%s), skipped!",
-                    creditType, entry, dungeonEncounter->Name->Str[sWorld->GetDefaultDbcLocale()]);
+                    creditType, entry, dungeonEncounter->Name[sWorld->GetDefaultDbcLocale()]);
                 continue;
         }
 
@@ -6943,7 +6938,7 @@ void ObjectMgr::LoadGameObjectLocales()
         std::string localeName      = fields[1].GetString();
 
         LocaleConstant locale = GetLocaleByName(localeName);
-        if (locale == LOCALE_enUS)
+        if (!IsValidLocale(locale) || locale == LOCALE_enUS)
             continue;
 
         GameObjectLocale& data = _gameObjectLocaleStore[id];
@@ -7025,7 +7020,7 @@ void ObjectMgr::LoadGameObjectTemplate()
         go.entry = db2go->ID;
         go.type = db2go->TypeID;
         go.displayId = db2go->DisplayID;
-        go.name = db2go->Name->Str[sWorld->GetDefaultDbcLocale()];
+        go.name = db2go->Name[sWorld->GetDefaultDbcLocale()];
         go.size = db2go->Scale;
         memset(go.raw.data, 0, sizeof(go.raw.data));
         memcpy(go.raw.data, db2go->PropValue, std::min(sizeof(db2go->PropValue), sizeof(go.raw.data)));
@@ -8728,7 +8723,7 @@ void ObjectMgr::LoadTrainers()
             std::string localeName = fields[1].GetString();
 
             LocaleConstant locale = GetLocaleByName(localeName);
-            if (locale == LOCALE_enUS)
+            if (!IsValidLocale(locale) || locale == LOCALE_enUS)
                 continue;
 
             if (Trainer::Trainer* trainer = Trinity::Containers::MapGetValuePtr(_trainers, trainerId))
@@ -8743,33 +8738,51 @@ void ObjectMgr::LoadTrainers()
     TC_LOG_INFO("server.loading", ">> Loaded " SZFMTD " Trainers in %u ms", _trainers.size(), GetMSTimeDiffToNow(oldMSTime));
 }
 
-void ObjectMgr::LoadCreatureDefaultTrainers()
+void ObjectMgr::LoadCreatureTrainers()
 {
     uint32 oldMSTime = getMSTime();
 
     _creatureDefaultTrainers.clear();
 
-    if (QueryResult result = WorldDatabase.Query("SELECT CreatureId, TrainerId FROM creature_default_trainer"))
+    if (QueryResult result = WorldDatabase.Query("SELECT CreatureId, TrainerId, MenuId, OptionIndex FROM creature_trainer"))
     {
         do
         {
             Field* fields = result->Fetch();
             uint32 creatureId = fields[0].GetUInt32();
             uint32 trainerId = fields[1].GetUInt32();
+            uint32 gossipMenuId = fields[2].GetUInt32();
+            uint32 gossipOptionIndex = fields[3].GetUInt32();
 
             if (!GetCreatureTemplate(creatureId))
             {
-                TC_LOG_ERROR("sql.sql", "Table `creature_default_trainer` references non-existing creature template (CreatureId: %u), ignoring", creatureId);
+                TC_LOG_ERROR("sql.sql", "Table `creature_trainer` references non-existing creature template (CreatureId: %u), ignoring", creatureId);
                 continue;
             }
 
             if (!GetTrainer(trainerId))
             {
-                TC_LOG_ERROR("sql.sql", "Table `creature_default_trainer` references non-existing trainer (TrainerId: %u) for CreatureId %u, ignoring", trainerId, creatureId);
+                TC_LOG_ERROR("sql.sql", "Table `creature_trainer` references non-existing trainer (TrainerId: %u) for CreatureId %u MenuId %u OptionIndex %u, ignoring",
+                    trainerId, creatureId, gossipMenuId, gossipOptionIndex);
                 continue;
             }
 
-            _creatureDefaultTrainers[creatureId] = trainerId;
+            if (gossipMenuId || gossipOptionIndex)
+            {
+                Trinity::IteratorPair<GossipMenuItemsContainer::const_iterator> gossipMenuItems = GetGossipMenuItemsMapBounds(gossipMenuId);
+                auto gossipOptionItr = std::find_if(gossipMenuItems.begin(), gossipMenuItems.end(), [gossipOptionIndex](std::pair<uint32 const, GossipMenuItems> const& entry)
+                {
+                    return entry.second.OptionIndex == gossipOptionIndex;
+                });
+                if (gossipOptionItr == gossipMenuItems.end())
+                {
+                    TC_LOG_ERROR("sql.sql", "Table `creature_trainer` references non-existing gossip menu option (MenuId %u OptionIndex %u) for CreatureId %u and TrainerId %u, ignoring",
+                        gossipMenuId, gossipOptionIndex, creatureId, trainerId);
+                    continue;
+                }
+            }
+
+            _creatureDefaultTrainers[std::make_tuple(creatureId, gossipMenuId, gossipOptionIndex)] = trainerId;
         } while (result->NextRow());
     }
 
@@ -8929,13 +8942,10 @@ void ObjectMgr::LoadGossipMenuItems()
     //   7                8
         "oa.ActionMenuId, oa.ActionPoiId, "
     //   9            10           11          12
-        "ob.BoxCoded, ob.BoxMoney, ob.BoxText, ob.BoxBroadcastTextId, "
-    //   13
-        "ot.TrainerId "
+        "ob.BoxCoded, ob.BoxMoney, ob.BoxText, ob.BoxBroadcastTextId "
         "FROM gossip_menu_option o "
         "LEFT JOIN gossip_menu_option_action oa ON o.MenuId = oa.MenuId AND o.OptionIndex = oa.OptionIndex "
         "LEFT JOIN gossip_menu_option_box ob ON o.MenuId = ob.MenuId AND o.OptionIndex = ob.OptionIndex "
-        "LEFT JOIN gossip_menu_option_trainer ot ON o.MenuId = ot.MenuId AND o.OptionIndex = ot.OptionIndex "
         "ORDER BY o.MenuId, o.OptionIndex");
 
     if (!result)
@@ -8963,7 +8973,6 @@ void ObjectMgr::LoadGossipMenuItems()
         gMenuItem.BoxMoney              = fields[10].GetUInt32();
         gMenuItem.BoxText               = fields[11].GetString();
         gMenuItem.BoxBroadcastTextId    = fields[12].GetUInt32();
-        gMenuItem.TrainerId             = fields[13].GetUInt32();
 
         if (gMenuItem.OptionIcon >= GOSSIP_ICON_MAX)
         {
@@ -8998,12 +9007,6 @@ void ObjectMgr::LoadGossipMenuItems()
             }
         }
 
-        if (gMenuItem.TrainerId && !GetTrainer(gMenuItem.TrainerId))
-        {
-            TC_LOG_ERROR("sql.sql", "Table `gossip_menu_option_trainer` for MenuId %u, OptionIndex %u use non-existing TrainerId %u, ignoring", gMenuItem.MenuId, gMenuItem.OptionIndex, gMenuItem.TrainerId);
-            gMenuItem.TrainerId = 0;
-        }
-
         _gossipMenuItemsStore.insert(GossipMenuItemsContainer::value_type(gMenuItem.MenuId, gMenuItem));
     } while (result->NextRow());
 
@@ -9015,9 +9018,9 @@ Trainer::Trainer const* ObjectMgr::GetTrainer(uint32 trainerId) const
     return Trinity::Containers::MapGetValuePtr(_trainers, trainerId);
 }
 
-uint32 ObjectMgr::GetCreatureDefaultTrainer(uint32 creatureId) const
+uint32 ObjectMgr::GetCreatureTrainerForGossipOption(uint32 creatureId, uint32 gossipMenuId, uint32 gossipOptionIndex) const
 {
-    auto itr = _creatureDefaultTrainers.find(creatureId);
+    auto itr = _creatureDefaultTrainers.find(std::make_tuple(creatureId, gossipMenuId, gossipOptionIndex));
     if (itr != _creatureDefaultTrainers.end())
         return itr->second;
 
@@ -10477,7 +10480,7 @@ void ObjectMgr::LoadPlayerChoicesLocale()
             }
 
             LocaleConstant locale = GetLocaleByName(localeName);
-            if (locale == LOCALE_enUS)
+            if (!IsValidLocale(locale) || locale == LOCALE_enUS)
                 continue;
 
             PlayerChoiceLocale& data = _playerChoiceLocales[choiceId];
@@ -10518,7 +10521,7 @@ void ObjectMgr::LoadPlayerChoicesLocale()
             }
 
             LocaleConstant locale = GetLocaleByName(localeName);
-            if (locale == LOCALE_enUS)
+            if (!IsValidLocale(locale) || locale == LOCALE_enUS)
                 continue;
 
             PlayerChoiceResponseLocale& data = itr->second.Responses[responseId];

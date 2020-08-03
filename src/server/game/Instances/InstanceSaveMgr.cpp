@@ -337,11 +337,6 @@ void InstanceSaveManager::LoadResetTimes()
 
             uint32 instanceId = fields[0].GetUInt32();
 
-            // Instances are pulled in ascending order from db and nextInstanceId is initialized with 1,
-            // so if the instance id is used, increment until we find the first unused one for a potential new instance
-            if (sMapMgr->GetNextInstanceId() == instanceId)
-                sMapMgr->SetNextInstanceId(instanceId + 1);
-
             // Mark instance id as being used
             sMapMgr->RegisterInstanceId(instanceId);
 
@@ -651,7 +646,7 @@ void InstanceSaveManager::_ResetOrWarnAll(uint32 mapid, Difficulty difficulty, b
     MapEntry const* mapEntry = sMapStore.LookupEntry(mapid);
     if (!mapEntry->Instanceable())
         return;
-    TC_LOG_DEBUG("misc", "InstanceSaveManager::ResetOrWarnAll: Processing map %s (%u) on difficulty %u (warn? %u)", mapEntry->MapName->Str[sWorld->GetDefaultDbcLocale()], mapid, uint8(difficulty), warn);
+    TC_LOG_DEBUG("misc", "InstanceSaveManager::ResetOrWarnAll: Processing map %s (%u) on difficulty %u (warn? %u)", mapEntry->MapName[sWorld->GetDefaultDbcLocale()], mapid, uint8(difficulty), warn);
 
     time_t now = time(NULL);
 

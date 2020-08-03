@@ -56,6 +56,7 @@
 #include "PassiveAI.h"
 #include "Pet.h"
 #include "PetAI.h"
+#include "PetPackets.h"
 #include "PhasingHandler.h"
 #include "Player.h"
 #include "PlayerAI.h"
@@ -506,7 +507,6 @@ void Unit::Update(uint32 p_time)
 
     UpdateSplineMovement(p_time);
     i_motionMaster->UpdateMotion(p_time);
-    UpdateUnderwaterState(GetMap(), GetPositionX(), GetPositionY(), GetPositionZ());
 }
 
 bool Unit::haveOffhandWeapon() const
@@ -729,19 +729,15 @@ uint32 Unit::DealDamage(Unit* victim, uint32 damage, CleanDamage const* cleanDam
         // Signal to pets that their owner was attacked - except when DOT.
         if (damagetype != DOT)
         {
-            Pet* pet = victim->ToPlayer()->GetPet();
-
-            if (pet && pet->IsAlive())
-                pet->AI()->OwnerAttackedBy(this);
+            for (Unit* controlled : victim->m_Controlled)
+                if (Creature* cControlled = controlled->ToCreature())
+                    if (cControlled->IsAIEnabled)
+                        cControlled->AI()->OwnerAttackedBy(this);
         }
 
         if (victim->ToPlayer()->GetCommandStatus(CHEAT_GOD))
             return 0;
     }
-
-    // Signal the pet it was attacked so the AI can respond if needed
-    if (victim->GetTypeId() == TYPEID_UNIT && this != victim && victim->IsPet() && victim->IsAlive())
-        victim->ToPet()->AI()->AttackedBy(this);
 
     if (damagetype != NODAMAGE)
     {
@@ -3164,48 +3160,34 @@ bool Unit::IsUnderWater() const
     return GetMap()->IsUnderWater(GetPhaseShift(), GetPositionX(), GetPositionY(), GetPositionZ());
 }
 
-void Unit::UpdateUnderwaterState(Map* m, float x, float y, float z)
+void Unit::ProcessPositionDataChanged(PositionFullTerrainStatus const& data)
 {
-    if (IsFlying() || (!IsPet() && !IsVehicle()))
+    WorldObject::ProcessPositionDataChanged(data);
+    ProcessTerrainStatusUpdate(data.liquidStatus, data.liquidInfo);
+}
+
+void Unit::ProcessTerrainStatusUpdate(ZLiquidStatus status, Optional<LiquidData> const& liquidData)
+{
+    if (IsFlying() || (!IsControlledByPlayer()))
         return;
 
-    LiquidData liquid_status;
-    ZLiquidStatus res = m->getLiquidStatus(GetPhaseShift(), x, y, z, MAP_ALL_LIQUIDS, &liquid_status);
-    if (!res)
+    // remove appropriate auras if we are swimming/not swimming respectively
+    if (status & MAP_LIQUID_STATUS_SWIMMING)
+        RemoveAurasWithInterruptFlags(AURA_INTERRUPT_FLAG_NOT_ABOVEWATER);
+    else
+        RemoveAurasWithInterruptFlags(AURA_INTERRUPT_FLAG_NOT_UNDERWATER);
+
+    // liquid aura handling
+    LiquidTypeEntry const* curLiquid = nullptr;
+    if ((status & MAP_LIQUID_STATUS_SWIMMING) && liquidData)
+        curLiquid = sLiquidTypeStore.LookupEntry(liquidData->entry);
+    if (curLiquid != _lastLiquid)
     {
         if (_lastLiquid && _lastLiquid->SpellID)
             RemoveAurasDueToSpell(_lastLiquid->SpellID);
-
-        RemoveAurasWithInterruptFlags(AURA_INTERRUPT_FLAG_NOT_UNDERWATER);
-        _lastLiquid = NULL;
-        return;
-    }
-
-    if (uint32 liqEntry = liquid_status.entry)
-    {
-        LiquidTypeEntry const* liquid = sLiquidTypeStore.LookupEntry(liqEntry);
-        if (_lastLiquid && _lastLiquid->SpellID && _lastLiquid->ID != liqEntry)
-            RemoveAurasDueToSpell(_lastLiquid->SpellID);
-
-        if (liquid && liquid->SpellID)
-        {
-            if (res & (LIQUID_MAP_UNDER_WATER | LIQUID_MAP_IN_WATER))
-            {
-                if (!HasAura(liquid->SpellID))
-                    CastSpell(this, liquid->SpellID, true);
-            }
-            else
-                RemoveAurasDueToSpell(liquid->SpellID);
-        }
-
-        RemoveAurasWithInterruptFlags(AURA_INTERRUPT_FLAG_NOT_ABOVEWATER);
-        _lastLiquid = liquid;
-    }
-    else if (_lastLiquid && _lastLiquid->SpellID)
-    {
-        RemoveAurasDueToSpell(_lastLiquid->SpellID);
-        RemoveAurasWithInterruptFlags(AURA_INTERRUPT_FLAG_NOT_UNDERWATER);
-        _lastLiquid = NULL;
+        if (curLiquid && curLiquid->SpellID)
+            CastSpell(this, curLiquid->SpellID, true);
+        _lastLiquid = curLiquid;
     }
 }
 
@@ -5636,7 +5618,7 @@ void Unit::_removeAttacker(Unit* pAttacker)
 Unit* Unit::getAttackerForHelper() const                 // If someone wants to help, who to give them
 {
     if (Unit* victim = GetVictim())
-        if (!IsControlledByPlayer() || IsInCombatWith(victim) || victim->IsInCombatWith(this))
+        if ((!IsPet() && !GetPlayerMovingMe()) || IsInCombatWith(victim) || victim->IsInCombatWith(this))
             return victim;
 
     if (!m_attackers.empty())
@@ -5743,6 +5725,14 @@ bool Unit::Attack(Unit* victim, bool meleeAttack)
         if (victim->GetTypeId() == TYPEID_PLAYER)
             victim->SetInCombatWith(this);
 
+        if (Unit* owner = victim->GetOwner())
+        {
+            AddThreat(owner, 0.0f);
+            SetInCombatWith(owner);
+            if (owner->GetTypeId() == TYPEID_PLAYER)
+                owner->SetInCombatWith(this);
+        }
+
         creature->SendAIReaction(AI_REACTION_HOSTILE);
         creature->CallAssistance();
 
@@ -5761,10 +5751,10 @@ bool Unit::Attack(Unit* victim, bool meleeAttack)
     // Spells such as auto-shot and others handled in WorldSession::HandleCastSpellOpcode
     if (GetTypeId() == TYPEID_PLAYER)
     {
-        Pet* playerPet = this->ToPlayer()->GetPet();
-
-        if (playerPet && playerPet->IsAlive())
-            playerPet->AI()->OwnerAttacked(victim);
+        for (Unit* controlled : m_Controlled)
+            if (Creature* cControlled = controlled->ToCreature())
+                if (cControlled->IsAIEnabled)
+                    cControlled->AI()->OwnerAttacked(victim);
     }
 
     return true;
@@ -7890,7 +7880,7 @@ MountCapabilityEntry const* Unit::GetMountCapability(uint32 mountType) const
         mountFlags = areaTable->MountFlags;
 
     LiquidData liquid;
-    ZLiquidStatus liquidStatus = GetMap()->getLiquidStatus(GetPhaseShift(), GetPositionX(), GetPositionY(), GetPositionZ(), MAP_ALL_LIQUIDS, &liquid);
+    ZLiquidStatus liquidStatus = GetMap()->GetLiquidStatus(GetPhaseShift(), GetPositionX(), GetPositionY(), GetPositionZ(), MAP_ALL_LIQUIDS, &liquid);
     isSubmerged = (liquidStatus & LIQUID_MAP_UNDER_WATER) != 0 || HasUnitMovementFlag(MOVEMENTFLAG_SWIMMING);
     isInWater = (liquidStatus & (LIQUID_MAP_IN_WATER | LIQUID_MAP_UNDER_WATER)) != 0;
 
@@ -8000,12 +7990,7 @@ void Unit::CombatStart(Unit* target, bool initialAggro)
 
         if (!target->IsInCombat() && target->GetTypeId() != TYPEID_PLAYER
             && !target->ToCreature()->HasReactState(REACT_PASSIVE) && target->ToCreature()->IsAIEnabled)
-        {
-            if (target->IsPet())
-                target->ToCreature()->AI()->AttackedBy(this); // PetAI has special handler before AttackStart()
-            else
-                target->ToCreature()->AI()->AttackStart(this);
-        }
+            target->ToCreature()->AI()->AttackStart(this);
 
         SetInCombatWith(target);
         target->SetInCombatWith(this);
@@ -10655,15 +10640,16 @@ Player* Unit::GetSpellModOwner() const
 }
 
 ///----------Pet responses methods-----------------
-void Unit::SendPetActionFeedback(uint8 msg)
+void Unit::SendPetActionFeedback(PetActionFeedback msg, uint32 spellId)
 {
     Unit* owner = GetOwner();
     if (!owner || owner->GetTypeId() != TYPEID_PLAYER)
         return;
 
-    WorldPacket data(SMSG_PET_ACTION_FEEDBACK, 1);
-    data << uint8(msg);
-    owner->ToPlayer()->GetSession()->SendPacket(&data);
+    WorldPackets::Pet::PetActionFeedback petActionFeedback;
+    petActionFeedback.SpellID = spellId;
+    petActionFeedback.Response = msg;
+    owner->ToPlayer()->SendDirectMessage(petActionFeedback.Write());
 }
 
 void Unit::SendPetTalk(uint32 pettalk)
@@ -10672,10 +10658,10 @@ void Unit::SendPetTalk(uint32 pettalk)
     if (!owner || owner->GetTypeId() != TYPEID_PLAYER)
         return;
 
-    WorldPacket data(SMSG_PET_ACTION_SOUND, 8 + 4);
-    data << GetGUID();
-    data << uint32(pettalk);
-    owner->ToPlayer()->GetSession()->SendPacket(&data);
+    WorldPackets::Pet::PetActionSound petActionSound;
+    petActionSound.UnitGUID = GetGUID();
+    petActionSound.Action = pettalk;
+    owner->ToPlayer()->SendDirectMessage(petActionSound.Write());
 }
 
 void Unit::SendPetAIReaction(ObjectGuid guid)
@@ -13371,8 +13357,7 @@ bool Unit::UpdatePosition(float x, float y, float z, float orientation, bool tel
     else if (turn)
         UpdateOrientation(orientation);
 
-    // code block for underwater state update
-    UpdateUnderwaterState(GetMap(), x, y, z);
+    UpdatePositionData();
 
     return (relocated || turn);
 }
@@ -14095,7 +14080,7 @@ void Unit::SendSetVehicleRecId(uint32 vehicleId)
 void Unit::ApplyMovementForce(ObjectGuid id, Position origin, float magnitude, uint8 type, Position direction /*= {}*/, ObjectGuid transportGuid /*= ObjectGuid::Empty*/)
 {
     if (!_movementForces)
-        _movementForces = Trinity::make_unique<MovementForces>();
+        _movementForces = std::make_unique<MovementForces>();
 
     MovementForce force;
     force.ID = id;
@@ -14208,7 +14193,7 @@ void Unit::UpdateMovementForcesModMagnitude()
     }
 
     if (modMagnitude != 1.0f && !_movementForces)
-        _movementForces = Trinity::make_unique<MovementForces>();
+        _movementForces = std::make_unique<MovementForces>();
 
     if (_movementForces)
     {

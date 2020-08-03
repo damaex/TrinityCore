@@ -410,7 +410,7 @@ bool World::RemoveQueuedPlayer(WorldSession* sess)
         if (*iter == sess)
         {
             sess->SetInQueue(false);
-            sess->ResetTimeOutTime();
+            sess->ResetTimeOutTime(false);
             iter = m_QueuedPlayer.erase(iter);
             found = true;                                   // removing queued session
             break;
@@ -753,6 +753,7 @@ void World::LoadConfigSettings(bool reload)
     }
 
     m_int_configs[CONFIG_SOCKET_TIMEOUTTIME] = sConfigMgr->GetIntDefault("SocketTimeOutTime", 900000);
+    m_int_configs[CONFIG_SOCKET_TIMEOUTTIME_ACTIVE] = sConfigMgr->GetIntDefault("SocketTimeOutTimeActive", 60000);
     m_int_configs[CONFIG_SESSION_ADD_DELAY] = sConfigMgr->GetIntDefault("SessionAddDelay", 10000);
 
     m_float_configs[CONFIG_GROUP_XP_DISTANCE] = sConfigMgr->GetFloatDefault("MaxGroupXPDistance", 74.0f);
@@ -1354,7 +1355,6 @@ void World::LoadConfigSettings(bool reload)
     m_bool_configs[CONFIG_RESET_DUEL_HEALTH_MANA] = sConfigMgr->GetBoolDefault("ResetDuelHealthMana", false);
     m_bool_configs[CONFIG_START_ALL_EXPLORED] = sConfigMgr->GetBoolDefault("PlayerStart.MapsExplored", false);
     m_bool_configs[CONFIG_START_ALL_REP] = sConfigMgr->GetBoolDefault("PlayerStart.AllReputation", false);
-    m_bool_configs[CONFIG_ALWAYS_MAXSKILL] = sConfigMgr->GetBoolDefault("AlwaysMaxWeaponSkill", false);
     m_bool_configs[CONFIG_PVP_TOKEN_ENABLE] = sConfigMgr->GetBoolDefault("PvPToken.Enable", false);
     m_int_configs[CONFIG_PVP_TOKEN_MAP_TYPE] = sConfigMgr->GetIntDefault("PvPToken.MapAllowType", 4);
     m_int_configs[CONFIG_PVP_TOKEN_ID] = sConfigMgr->GetIntDefault("PvPToken.ItemID", 29434);
@@ -1497,6 +1497,9 @@ void World::LoadConfigSettings(bool reload)
     m_bool_configs[CONFIG_CREATURE_CHECK_INVALID_POSITION] = sConfigMgr->GetBoolDefault("Creature.CheckInvalidPosition", false);
     m_bool_configs[CONFIG_GAME_OBJECT_CHECK_INVALID_POSITION] = sConfigMgr->GetBoolDefault("GameObject.CheckInvalidPosition", false);
 
+    // Whether to use LoS from game objects
+    m_bool_configs[CONFIG_CHECK_GOBJECT_LOS] = sConfigMgr->GetBoolDefault("CheckGameObjectLoS", true);
+
     // call ScriptMgr if we're reloading the configuration
     if (reload)
         sScriptMgr->OnConfigLoad(reload);
@@ -1545,10 +1548,6 @@ void World::SetInitialWorldSettings()
         exit(1);
     }
 
-    ///- Initialize PlayerDump
-    TC_LOG_INFO("server.loading", "Initialize PlayerDump...");
-    PlayerDump::InitializeColumnDefinition();
-
     ///- Initialize pool manager
     sPoolMgr->Initialize();
 
@@ -1572,9 +1571,15 @@ void World::SetInitialWorldSettings()
 
     TC_LOG_INFO("server.loading", "Initialize data stores...");
     ///- Load DB2s
-    sDB2Manager.LoadStores(m_dataPath, m_defaultDbcLocale);
+    m_availableDbcLocaleMask = sDB2Manager.LoadStores(m_dataPath, m_defaultDbcLocale);
+    if (!(m_availableDbcLocaleMask & (1 << m_defaultDbcLocale)))
+    {
+        TC_LOG_FATAL("server.loading", "Unable to load db2 files for %s locale specified in DBC.Locale config!", localeNames[m_defaultDbcLocale]);
+        exit(1);
+    }
+
     TC_LOG_INFO("misc", "Loading hotfix blobs...");
-    sDB2Manager.LoadHotfixBlob();
+    sDB2Manager.LoadHotfixBlob(m_availableDbcLocaleMask);
     TC_LOG_INFO("misc", "Loading hotfix info...");
     sDB2Manager.LoadHotfixData();
     ///- Close hotfix database - it is only used during DB2 loading
@@ -1615,6 +1620,9 @@ void World::SetInitialWorldSettings()
 
     ///- Initialize static helper structures
     AIRegistry::Initialize();
+
+    TC_LOG_INFO("server.loading", "Initializing PlayerDump tables...");
+    PlayerDump::InitializeTables();
 
     TC_LOG_INFO("server.loading", "Loading SpellInfo store...");
     sSpellMgr->LoadSpellInfoStore();
@@ -1987,14 +1995,14 @@ void World::SetInitialWorldSettings()
     TC_LOG_INFO("server.loading", "Loading Trainers...");
     sObjectMgr->LoadTrainers();                                 // must be after load CreatureTemplate
 
-    TC_LOG_INFO("server.loading", "Loading Creature default trainers...");
-    sObjectMgr->LoadCreatureDefaultTrainers();
-
     TC_LOG_INFO("server.loading", "Loading Gossip menu...");
     sObjectMgr->LoadGossipMenu();
 
     TC_LOG_INFO("server.loading", "Loading Gossip menu options...");
-    sObjectMgr->LoadGossipMenuItems();                          // must be after LoadTrainers
+    sObjectMgr->LoadGossipMenuItems();
+
+    TC_LOG_INFO("server.loading", "Loading Creature trainers...");
+    sObjectMgr->LoadCreatureTrainers();                         // must be after LoadGossipMenuItems
 
     TC_LOG_INFO("server.loading", "Loading Vendors...");
     sObjectMgr->LoadVendors();                                  // must be after load CreatureTemplate and ItemTemplate

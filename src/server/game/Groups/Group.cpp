@@ -1130,10 +1130,8 @@ void Group::MasterLoot(Loot* loot, WorldObject* pLootedObject)
         i->is_blocked = !i->is_underthreshold;
     }
 
-    uint32 real_count = 0;
-
-    WorldPacket data(SMSG_MASTER_LOOT_CANDIDATE_LIST, 1 + GetMembersCount() * 8);
-    data << uint8(GetMembersCount());
+    WorldPackets::Loot::MasterLootCandidateList masterLootCandidateList;
+    masterLootCandidateList.LootObj = loot->GetGUID();
 
     for (GroupReference* itr = GetFirstMember(); itr != NULL; itr = itr->next())
     {
@@ -1142,19 +1140,16 @@ void Group::MasterLoot(Loot* loot, WorldObject* pLootedObject)
             continue;
 
         if (looter->IsAtGroupRewardDistance(pLootedObject))
-        {
-            data << looter->GetGUID();
-            ++real_count;
-        }
+            masterLootCandidateList.Players.push_back(looter->GetGUID());
     }
 
-    data.put<uint8>(0, real_count);
+    masterLootCandidateList.Write();
 
     for (GroupReference* itr = GetFirstMember(); itr != NULL; itr = itr->next())
     {
         Player* looter = itr->GetSource();
         if (looter->IsAtGroupRewardDistance(pLootedObject))
-            looter->GetSession()->SendPacket(&data);
+            looter->GetSession()->SendPacket(masterLootCandidateList.GetRawPacket());
     }
 }
 
@@ -2385,7 +2380,7 @@ void Group::AddRaidMarker(uint8 markerId, uint32 mapId, float positionX, float p
         return;
 
     m_activeMarkers |= (1 << markerId);
-    m_markers[markerId] = Trinity::make_unique<RaidMarker>(mapId, positionX, positionY, positionZ, transportGuid);
+    m_markers[markerId] = std::make_unique<RaidMarker>(mapId, positionX, positionY, positionZ, transportGuid);
     SendRaidMarkersChanged();
 }
 
@@ -2506,12 +2501,12 @@ ObjectGuid Group::GetMemberGUID(const std::string& name)
     return ObjectGuid::Empty;
 }
 
-bool Group::IsAssistant(ObjectGuid guid) const
+uint8 Group::GetMemberFlags(ObjectGuid guid) const
 {
     member_citerator mslot = _getMemberCSlot(guid);
     if (mslot == m_memberSlots.end())
-        return false;
-    return mslot->flags & MEMBER_FLAG_ASSISTANT;
+        return 0u;
+    return mslot->flags;
 }
 
 bool Group::SameSubGroup(ObjectGuid guid1, ObjectGuid guid2) const
@@ -2565,7 +2560,8 @@ void Group::SetGroupMemberFlag(ObjectGuid guid, bool apply, GroupMemberFlags fla
         return;
 
     // Do flag specific actions, e.g ensure uniqueness
-    switch (flag) {
+    switch (flag)
+    {
         case MEMBER_FLAG_MAINASSIST:
             RemoveUniqueGroupMemberFlag(MEMBER_FLAG_MAINASSIST);         // Remove main assist flag from current if any.
             break;

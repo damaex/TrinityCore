@@ -262,7 +262,7 @@ void WorldSession::HandleGameobjectReportUse(WorldPackets::GameObject::GameObjRe
 
     if (GameObject* go = GetPlayer()->GetGameObjectIfCanInteractWith(packet.Guid))
     {
-        if (go->AI()->GossipHello(_player, true))
+        if (go->AI()->OnReportUse(_player))
             return;
 
         _player->UpdateCriteria(CRITERIA_TYPE_USE_GAMEOBJECT, go->GetEntry());
@@ -420,7 +420,7 @@ void WorldSession::HandlePetCancelAuraOpcode(WorldPackets::Spells::PetCancelAura
 
     if (!pet->IsAlive())
     {
-        pet->SendPetActionFeedback(FEEDBACK_PET_DEAD);
+        pet->SendPetActionFeedback(PetActionFeedback::Dead, 0);
         return;
     }
 

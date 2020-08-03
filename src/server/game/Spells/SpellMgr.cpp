@@ -2735,6 +2735,9 @@ void SpellMgr::LoadSpellInfoCustomAttributes()
                     break;
                 }
             }
+
+            if (!spellInfoMutable->_IsPositiveEffect(effect->EffectIndex, false))
+                spellInfoMutable->NegativeEffects[effect->EffectIndex] = true;
         }
 
         // spells ignoring hit result should not be binary
@@ -2766,6 +2769,9 @@ void SpellMgr::LoadSpellInfoCustomAttributes()
                     case SPELL_EFFECT_APPLY_AREA_AURA_ENEMY:
                     case SPELL_EFFECT_APPLY_AREA_AURA_PET:
                     case SPELL_EFFECT_APPLY_AREA_AURA_OWNER:
+                    case SPELL_EFFECT_APPLY_AURA_ON_PET:
+                    case SPELL_EFFECT_202:
+                    case SPELL_EFFECT_APPLY_AREA_AURA_PARTY_NONRANDOM:
                         if (effect->ApplyAuraName == SPELL_AURA_PERIODIC_DAMAGE ||
                             effect->ApplyAuraName == SPELL_AURA_PERIODIC_DAMAGE_PERCENT ||
                             effect->ApplyAuraName == SPELL_AURA_DUMMY ||
@@ -2816,15 +2822,6 @@ void SpellMgr::LoadSpellInfoCustomAttributes()
             spellInfoMutable->SchoolMask &= ~SPELL_SCHOOL_MASK_NORMAL;
             spellInfoMutable->AttributesCu |= SPELL_ATTR0_CU_SCHOOLMASK_NORMAL_WITH_MAGIC;
         }
-
-        if (!spellInfoMutable->_IsPositiveEffect(EFFECT_0, false))
-            spellInfoMutable->AttributesCu |= SPELL_ATTR0_CU_NEGATIVE_EFF0;
-
-        if (!spellInfoMutable->_IsPositiveEffect(EFFECT_1, false))
-            spellInfoMutable->AttributesCu |= SPELL_ATTR0_CU_NEGATIVE_EFF1;
-
-        if (!spellInfoMutable->_IsPositiveEffect(EFFECT_2, false))
-            spellInfoMutable->AttributesCu |= SPELL_ATTR0_CU_NEGATIVE_EFF2;
 
         if (talentSpells.count(spellInfoMutable->Id))
             spellInfoMutable->AttributesCu |= SPELL_ATTR0_CU_IS_TALENT;

@@ -438,7 +438,8 @@ bool SpellEffectInfo::IsAreaAuraEffect() const
         Effect == SPELL_EFFECT_APPLY_AREA_AURA_FRIEND   ||
         Effect == SPELL_EFFECT_APPLY_AREA_AURA_ENEMY    ||
         Effect == SPELL_EFFECT_APPLY_AREA_AURA_PET      ||
-        Effect == SPELL_EFFECT_APPLY_AREA_AURA_OWNER)
+        Effect == SPELL_EFFECT_APPLY_AREA_AURA_OWNER    ||
+        Effect == SPELL_EFFECT_APPLY_AREA_AURA_PARTY_NONRANDOM)
         return true;
     return false;
 }
@@ -457,7 +458,7 @@ bool SpellEffectInfo::IsFarDestTargetEffect() const
 
 bool SpellEffectInfo::IsUnitOwnedAuraEffect() const
 {
-    return IsAreaAuraEffect() || Effect == SPELL_EFFECT_APPLY_AURA;
+    return IsAreaAuraEffect() || Effect == SPELL_EFFECT_APPLY_AURA || Effect == SPELL_EFFECT_APPLY_AURA_ON_PET || Effect == SPELL_EFFECT_202;
 }
 
 int32 SpellEffectInfo::CalcValue(Unit const* caster /*= nullptr*/, int32 const* bp /*= nullptr*/, Unit const* target /*= nullptr*/, float* variance /*= nullptr*/, uint32 castItemId /*= 0*/, int32 itemLevel /*= -1*/) const
@@ -1082,7 +1083,7 @@ SpellInfo::SpellInfo(SpellNameEntry const* spellName, ::Difficulty difficulty, S
     }
     _effects.shrink_to_fit();
 
-    SpellName = spellName->Name;
+    SpellName = &spellName->Name;
 
     // SpellMiscEntry
     SpellMiscEntry const* _misc = data.Misc;
@@ -1566,21 +1567,12 @@ bool SpellInfo::CanBeUsedInCombat() const
 
 bool SpellInfo::IsPositive() const
 {
-    return !HasAttribute(SPELL_ATTR0_CU_NEGATIVE);
+    return NegativeEffects.none();
 }
 
 bool SpellInfo::IsPositiveEffect(uint8 effIndex) const
 {
-    switch (effIndex)
-    {
-        default:
-        case 0:
-            return !HasAttribute(SPELL_ATTR0_CU_NEGATIVE_EFF0);
-        case 1:
-            return !HasAttribute(SPELL_ATTR0_CU_NEGATIVE_EFF1);
-        case 2:
-            return !HasAttribute(SPELL_ATTR0_CU_NEGATIVE_EFF2);
-    }
+    return !NegativeEffects.test(effIndex);
 }
 
 bool SpellInfo::IsChanneled() const
@@ -2430,6 +2422,13 @@ void SpellInfo::_LoadAuraState()
             case 71465: // Divine Surge
             case 50241: // Evasive Charges
                 return AURA_STATE_UNKNOWN22;
+            case 9991:  // Touch of Zanzil
+            case 35325: // Glowing Blood
+            case 35328: // Lambent Blood
+            case 35329: // Vibrant Blood
+            case 35331: // Black Blood
+            case 49163: // Perpetual Instability
+                return AURA_STATE_FAERIE_FIRE;
             default:
                 break;
         }
@@ -3372,6 +3371,7 @@ void SpellInfo::_LoadImmunityInfo()
         switch (Id)
         {
             case 22812: // Barkskin
+            case 47585: // Dispersion
                 _allowedMechanicMask |=
                     (1 << MECHANIC_STUN) |
                     (1 << MECHANIC_FREEZE) |
@@ -3390,7 +3390,18 @@ void SpellInfo::_LoadImmunityInfo()
         _allowedMechanicMask |= (1 << MECHANIC_DISORIENTED);
 
     if (HasAttribute(SPELL_ATTR5_USABLE_WHILE_FEARED))
-        _allowedMechanicMask |= (1 << MECHANIC_FEAR);
+    {
+        switch (Id)
+        {
+            case 22812: // Barkskin
+            case 47585: // Dispersion
+                _allowedMechanicMask |= (1 << MECHANIC_FEAR) | (1 << MECHANIC_HORROR);
+                break;
+            default:
+                _allowedMechanicMask |= (1 << MECHANIC_FEAR);
+                break;
+        }
+    }
 }
 
 void SpellInfo::ApplyAllSpellImmunitiesTo(Unit* target, SpellEffectInfo const* effect, bool apply) const
@@ -4084,7 +4095,7 @@ SpellInfo const* SpellInfo::GetAuraRankForLevel(uint8 level) const
     bool needRankSelection = false;
     for (SpellEffectInfo const* effect : _effects)
     {
-        if (effect && IsPositiveEffect(effect->Effect) &&
+        if (effect && IsPositiveEffect(effect->EffectIndex) &&
             (effect->Effect == SPELL_EFFECT_APPLY_AURA ||
             effect->Effect == SPELL_EFFECT_APPLY_AREA_AURA_PARTY ||
             effect->Effect == SPELL_EFFECT_APPLY_AREA_AURA_RAID) &&

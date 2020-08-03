@@ -346,14 +346,14 @@ Player::Player(WorldSession* session) : Unit(true), m_sceneMgr(this)
 
     m_achievementMgr = new PlayerAchievementMgr(this);
     m_reputationMgr = new ReputationMgr(this);
-    m_questObjectiveCriteriaMgr = Trinity::make_unique<QuestObjectiveCriteriaMgr>(this);
+    m_questObjectiveCriteriaMgr = std::make_unique<QuestObjectiveCriteriaMgr>(this);
 
     for (uint8 i = 0; i < MAX_CUF_PROFILES; ++i)
         _CUFProfiles[i] = nullptr;
 
     _advancedCombatLoggingEnabled = false;
 
-    _restMgr = Trinity::make_unique<RestMgr>(this);
+    _restMgr = std::make_unique<RestMgr>(this);
 
     _usePvpItemLevels = false;
 }
@@ -522,56 +522,6 @@ bool Player::Create(ObjectGuid::LowType guidlow, WorldPackets::Character::Charac
     SetUpdateFieldValue(m_values.ModifyValue(&Player::m_activePlayerData).ModifyValue(&UF::ActivePlayerData::Coinage), sWorld->getIntConfig(CONFIG_START_PLAYER_MONEY));
     SetCreateCurrency(CURRENCY_TYPE_APEXIS_CRYSTALS, sWorld->getIntConfig(CONFIG_CURRENCY_START_APEXIS_CRYSTALS));
     SetCreateCurrency(CURRENCY_TYPE_JUSTICE_POINTS, sWorld->getIntConfig(CONFIG_CURRENCY_START_JUSTICE_POINTS));
-
-    // start with every map explored
-    if (sWorld->getBoolConfig(CONFIG_START_ALL_EXPLORED))
-    {
-        for (uint16 i = 0; i < PLAYER_EXPLORED_ZONES_SIZE; ++i)
-            SetUpdateFieldValue(m_values.ModifyValue(&Player::m_activePlayerData).ModifyValue(&UF::ActivePlayerData::ExploredZones, i), UI64LIT(0xFFFFFFFFFFFFFFFF));
-    }
-
-    //Reputations if "StartAllReputation" is enabled, -- @todo Fix this in a better way
-    if (sWorld->getBoolConfig(CONFIG_START_ALL_REP))
-    {
-        GetReputationMgr().SetReputation(sFactionStore.LookupEntry(942), 42999);
-        GetReputationMgr().SetReputation(sFactionStore.LookupEntry(935), 42999);
-        GetReputationMgr().SetReputation(sFactionStore.LookupEntry(936), 42999);
-        GetReputationMgr().SetReputation(sFactionStore.LookupEntry(1011), 42999);
-        GetReputationMgr().SetReputation(sFactionStore.LookupEntry(970), 42999);
-        GetReputationMgr().SetReputation(sFactionStore.LookupEntry(967), 42999);
-        GetReputationMgr().SetReputation(sFactionStore.LookupEntry(989), 42999);
-        GetReputationMgr().SetReputation(sFactionStore.LookupEntry(932), 42999);
-        GetReputationMgr().SetReputation(sFactionStore.LookupEntry(934), 42999);
-        GetReputationMgr().SetReputation(sFactionStore.LookupEntry(1038), 42999);
-        GetReputationMgr().SetReputation(sFactionStore.LookupEntry(1077), 42999);
-
-        // Factions depending on team, like cities and some more stuff
-        switch (GetTeam())
-        {
-        case ALLIANCE:
-            GetReputationMgr().SetReputation(sFactionStore.LookupEntry(72), 42999);
-            GetReputationMgr().SetReputation(sFactionStore.LookupEntry(47), 42999);
-            GetReputationMgr().SetReputation(sFactionStore.LookupEntry(69), 42999);
-            GetReputationMgr().SetReputation(sFactionStore.LookupEntry(930), 42999);
-            GetReputationMgr().SetReputation(sFactionStore.LookupEntry(730), 42999);
-            GetReputationMgr().SetReputation(sFactionStore.LookupEntry(978), 42999);
-            GetReputationMgr().SetReputation(sFactionStore.LookupEntry(54), 42999);
-            GetReputationMgr().SetReputation(sFactionStore.LookupEntry(946), 42999);
-            break;
-        case HORDE:
-            GetReputationMgr().SetReputation(sFactionStore.LookupEntry(76), 42999);
-            GetReputationMgr().SetReputation(sFactionStore.LookupEntry(68), 42999);
-            GetReputationMgr().SetReputation(sFactionStore.LookupEntry(81), 42999);
-            GetReputationMgr().SetReputation(sFactionStore.LookupEntry(911), 42999);
-            GetReputationMgr().SetReputation(sFactionStore.LookupEntry(729), 42999);
-            GetReputationMgr().SetReputation(sFactionStore.LookupEntry(941), 42999);
-            GetReputationMgr().SetReputation(sFactionStore.LookupEntry(530), 42999);
-            GetReputationMgr().SetReputation(sFactionStore.LookupEntry(947), 42999);
-            break;
-        default:
-            break;
-        }
-    }
 
     // Played time
     m_Last_tick = time(nullptr);
@@ -891,7 +841,7 @@ void Player::HandleDrowning(uint32 time_diff)
     }
 
     // In dark water
-    if (m_MirrorTimerFlags & UNDERWARER_INDARKWATER)
+    if (m_MirrorTimerFlags & UNDERWATER_INDARKWATER)
     {
         // Fatigue timer not activated - activate it
         if (m_MirrorTimer[FATIGUE_TIMER] == DISABLED_MIRROR_TIMER)
@@ -914,7 +864,7 @@ void Player::HandleDrowning(uint32 time_diff)
                 else if (HasPlayerFlag(PLAYER_FLAGS_GHOST))       // Teleport ghost to graveyard
                     RepopAtGraveyard();
             }
-            else if (!(m_MirrorTimerFlagsLast & UNDERWARER_INDARKWATER))
+            else if (!(m_MirrorTimerFlagsLast & UNDERWATER_INDARKWATER))
                 SendMirrorTimer(FATIGUE_TIMER, getMaxTimer(FATIGUE_TIMER), m_MirrorTimer[FATIGUE_TIMER], -1);
         }
     }
@@ -924,7 +874,7 @@ void Player::HandleDrowning(uint32 time_diff)
         m_MirrorTimer[FATIGUE_TIMER]+=10*time_diff;
         if (m_MirrorTimer[FATIGUE_TIMER] >= DarkWaterTime || !IsAlive())
             StopMirrorTimer(FATIGUE_TIMER);
-        else if (m_MirrorTimerFlagsLast & UNDERWARER_INDARKWATER)
+        else if (m_MirrorTimerFlagsLast & UNDERWATER_INDARKWATER)
             SendMirrorTimer(FATIGUE_TIMER, DarkWaterTime, m_MirrorTimer[FATIGUE_TIMER], 10);
     }
 
@@ -2302,7 +2252,6 @@ bool Player::IsInSameRaidWith(Player const* p) const
 }
 
 ///- If the player is invited, remove him. If the group if then only 1 person, disband the group.
-/// @todo Shouldn't we also check if there is no other invitees before disbanding the group?
 void Player::UninviteFromGroup()
 {
     Group* group = GetGroupInvite();
@@ -2311,13 +2260,14 @@ void Player::UninviteFromGroup()
 
     group->RemoveInvite(this);
 
-    if (group->GetMembersCount() <= 1)                       // group has just 1 member => disband
+    if (group->IsCreated())
     {
-        if (group->IsCreated())
-        {
+        if (group->GetMembersCount() <= 1) // group has just 1 member => disband
             group->Disband(true);
-        }
-        else
+    }
+    else
+    {
+        if (group->GetInviteeCount() <= 1)
         {
             group->RemoveAllInvites();
             delete group;
@@ -2469,9 +2419,6 @@ void Player::GiveLevel(uint8 level)
         ResetPvpTalents();
 
     UpdateAllStats();
-
-    if (sWorld->getBoolConfig(CONFIG_ALWAYS_MAXSKILL)) // Max weapon skill when leveling up
-        UpdateSkillsToMaxSkillsForLevel();
 
     _ApplyAllLevelScaleItemMods(true); // Moved to above SetFullHealth so player will have full health from Heirlooms
 
@@ -5641,53 +5588,16 @@ void Player::UpdateSkillsForLevel()
 
         if (GetSkillRangeType(rcEntry) == SKILL_RANGE_LEVEL)
         {
-            if (!IsWeaponSkill(rcEntry->SkillID))
-            {
-                uint16 max = m_activePlayerData->Skill->SkillMaxRank[itr->second.pos];
+            if (rcEntry->Flags & SKILL_FLAG_ALWAYS_MAX_VALUE)
+                SetSkillRank(itr->second.pos, maxSkill);
 
-                /// update only level dependent max skill values
-                if (max != 1)
-                {
-                    SetSkillRank(itr->second.pos, maxSkill);
-                    SetSkillMaxRank(itr->second.pos, maxSkill);
-                    if (itr->second.uState != SKILL_NEW)
-                        itr->second.uState = SKILL_CHANGED;
-                }
-            }
+            SetSkillMaxRank(itr->second.pos, maxSkill);
+            if (itr->second.uState != SKILL_NEW)
+                itr->second.uState = SKILL_CHANGED;
         }
 
         // Update level dependent skillline spells
         LearnSkillRewardedSpells(rcEntry->SkillID, m_activePlayerData->Skill->SkillRank[itr->second.pos]);
-    }
-}
-
-void Player::UpdateSkillsToMaxSkillsForLevel()
-{
-    for (SkillStatusMap::iterator itr = mSkillStatus.begin(); itr != mSkillStatus.end(); ++itr)
-    {
-        if (itr->second.uState == SKILL_DELETED || !m_activePlayerData->Skill->SkillRank[itr->second.pos])
-            continue;
-
-        uint32 pskill = itr->first;
-        SkillRaceClassInfoEntry const* rcEntry = sDB2Manager.GetSkillRaceClassInfo(pskill, getRace(), getClass());
-        if (!rcEntry)
-            continue;
-
-        if (IsProfessionOrRidingSkill(rcEntry->SkillID))
-            continue;
-
-        if (IsWeaponSkill(rcEntry->SkillID))
-            continue;
-
-        uint16 max = m_activePlayerData->Skill->SkillMaxRank[itr->second.pos];
-
-        if (max > 1)
-        {
-            SetSkillRank(itr->second.pos, max);
-
-            if (itr->second.uState != SKILL_NEW)
-                itr->second.uState = SKILL_CHANGED;
-        }
     }
 }
 
@@ -7092,8 +7002,7 @@ void Player::ResetCurrencyWeekCap()
         itr->second.state = PLAYERCURRENCY_CHANGED;
     }
 
-    WorldPacket data(SMSG_RESET_WEEKLY_CURRENCY, 0);
-    SendDirectMessage(&data);
+    SendDirectMessage(WorldPackets::Misc::ResetWeeklyCurrency().Write());
 }
 
 uint32 Player::GetCurrencyWeekCap(CurrencyTypesEntry const* currency) const
@@ -14803,7 +14712,7 @@ void Player::PrepareGossipMenu(WorldObject* source, uint32 menuId /*= 0*/, bool 
             }
 
             menu->GetGossipMenu().AddMenuItem(itr->second.OptionIndex, itr->second.OptionIcon, strOptionText, 0, itr->second.OptionType, strBoxText, itr->second.BoxMoney, itr->second.BoxCoded);
-            menu->GetGossipMenu().AddGossipMenuItemData(itr->second.OptionIndex, itr->second.ActionMenuId, itr->second.ActionPoiId, itr->second.TrainerId);
+            menu->GetGossipMenu().AddGossipMenuItemData(itr->second.OptionIndex, itr->second.ActionMenuId, itr->second.ActionPoiId);
         }
     }
 }
@@ -14904,7 +14813,7 @@ void Player::OnGossipSelect(WorldObject* source, uint32 optionIndex, uint32 menu
             GetSession()->SendStablePet(guid);
             break;
         case GOSSIP_OPTION_TRAINER:
-            GetSession()->SendTrainerList(source->ToCreature(), menuItemData->TrainerId);
+            GetSession()->SendTrainerList(source->ToCreature(), sObjectMgr->GetCreatureTrainerForGossipOption(source->GetEntry(), menuId, optionIndex));
             break;
         case GOSSIP_OPTION_LEARNDUALSPEC:
             break;
@@ -18645,7 +18554,7 @@ bool Player::LoadFromDB(ObjectGuid guid, CharacterDatabaseQueryHolder* holder)
 
     _LoadCUFProfiles(holder->GetPreparedResult(PLAYER_LOGIN_QUERY_LOAD_CUF_PROFILES));
 
-    std::unique_ptr<Garrison> garrison = Trinity::make_unique<Garrison>(this);
+    std::unique_ptr<Garrison> garrison = std::make_unique<Garrison>(this);
     if (garrison->LoadFromDB(holder->GetPreparedResult(PLAYER_LOGIN_QUERY_LOAD_GARRISON),
         holder->GetPreparedResult(PLAYER_LOGIN_QUERY_LOAD_GARRISON_BLUEPRINTS),
         holder->GetPreparedResult(PLAYER_LOGIN_QUERY_LOAD_GARRISON_BUILDINGS),
@@ -18704,7 +18613,7 @@ void Player::_LoadCUFProfiles(PreparedQueryResult result)
             continue;
         }
 
-        _CUFProfiles[id] = Trinity::make_unique<CUFProfile>(name, frameHeight, frameWidth, sortBy, healthText, boolOptions, topPoint, bottomPoint, leftPoint, topOffset, bottomOffset, leftOffset);
+        _CUFProfiles[id] = std::make_unique<CUFProfile>(name, frameHeight, frameWidth, sortBy, healthText, boolOptions, topPoint, bottomPoint, leftPoint, topOffset, bottomOffset, leftOffset);
     }
     while (result->NextRow());
 }
@@ -19836,7 +19745,7 @@ void Player::_LoadBoundInstances(PreparedQueryResult result)
             bool deleteInstance = false;
 
             MapEntry const* mapEntry = sMapStore.LookupEntry(mapId);
-            std::string mapname = mapEntry ? mapEntry->MapName->Str[sWorld->GetDefaultDbcLocale()] : "Unknown";
+            std::string mapname = mapEntry ? mapEntry->MapName[sWorld->GetDefaultDbcLocale()] : "Unknown";
 
             if (!mapEntry || !mapEntry->IsDungeon())
             {
@@ -20156,7 +20065,7 @@ bool Player::Satisfy(AccessRequirement const* ar, uint32 target_map, bool report
             {
                 if (missingQuest && !ar->questFailedText.empty())
                     ChatHandler(GetSession()).PSendSysMessage("%s", ar->questFailedText.c_str());
-                else if (mapDiff->Message->Str[sWorld->GetDefaultDbcLocale()][0] != '\0') // if (missingAchievement) covered by this case
+                else if (mapDiff->Message[sWorld->GetDefaultDbcLocale()][0] != '\0') // if (missingAchievement) covered by this case
                     SendTransferAborted(target_map, TRANSFER_ABORT_DIFFICULTY, target_difficulty);
                 else if (missingItem)
                     GetSession()->SendNotification(GetSession()->GetTrinityString(LANG_LEVEL_MINREQUIRED_AND_ITEM), LevelMin, ASSERT_NOTNULL(sObjectMgr->GetItemTemplate(missingItem))->GetName(GetSession()->GetSessionDbcLocale()));
@@ -24223,6 +24132,14 @@ void Player::SendInitialPacketsAfterAddToMap()
         _garrison->SendRemoteInfo();
 
     UpdateItemLevelAreaBasedScaling();
+
+    if (!GetPlayerSharingQuest().IsEmpty())
+    {
+        if (Quest const* quest = sObjectMgr->GetQuestTemplate(GetSharedQuestID()))
+            PlayerTalkClass->SendQuestGiverQuestDetails(quest, GetGUID(), true, false);
+        else
+            ClearQuestSharingInfo();
+    }
 }
 
 void Player::SendUpdateToOutOfRangeGroupMembers()
@@ -24415,8 +24332,6 @@ void Player::LearnDefaultSkill(SkillRaceClassInfoEntry const* rcInfo)
                 skillValue = maxValue;
             else if (getClass() == CLASS_DEATH_KNIGHT)
                 skillValue = std::min(std::max<uint16>({ 1, uint16((getLevel() - 1) * 5) }), maxValue);
-            else if (skillId == SKILL_FIST_WEAPONS)
-                skillValue = std::max<uint16>(1, GetSkillValue(SKILL_UNARMED));
 
             SetSkill(skillId, 0, skillValue, maxValue);
             break;
@@ -25708,77 +25623,52 @@ int32 Player::NextGroupUpdateSequenceNumber(GroupCategory category)
     return m_groupUpdateSequences[category].UpdateSequenceNumber++;
 }
 
-void Player::UpdateUnderwaterState(Map* m, float x, float y, float z)
+void Player::ProcessTerrainStatusUpdate(ZLiquidStatus status, Optional<LiquidData> const& liquidData)
 {
-    LiquidData liquid_status;
-    ZLiquidStatus res = m->getLiquidStatus(GetPhaseShift(), x, y, z, MAP_ALL_LIQUIDS, &liquid_status);
-    if (!res)
-    {
-        m_MirrorTimerFlags &= ~(UNDERWATER_INWATER | UNDERWATER_INLAVA | UNDERWATER_INSLIME | UNDERWARER_INDARKWATER);
-        if (_lastLiquid && _lastLiquid->SpellID)
-            RemoveAurasDueToSpell(_lastLiquid->SpellID);
-
-        _lastLiquid = nullptr;
+    if (IsFlying())
         return;
-    }
 
-    if (uint32 liqEntry = liquid_status.entry)
+    // process liquid auras using generic unit code
+    Unit::ProcessTerrainStatusUpdate(status, liquidData);
+
+    // player specific logic for mirror timers
+    if (status && liquidData)
     {
-        LiquidTypeEntry const* liquid = sLiquidTypeStore.LookupEntry(liqEntry);
-        if (_lastLiquid && _lastLiquid->SpellID && _lastLiquid != liquid)
-            RemoveAurasDueToSpell(_lastLiquid->SpellID);
-
-        if (liquid && liquid->SpellID)
+        // Breath bar state (under water in any liquid type)
+        if (liquidData->type_flags & MAP_ALL_LIQUIDS)
         {
-            if (res & (LIQUID_MAP_UNDER_WATER | LIQUID_MAP_IN_WATER))
-            {
-                if (!HasAura(liquid->SpellID))
-                    CastSpell(this, liquid->SpellID, true);
-            }
+            if (status & LIQUID_MAP_UNDER_WATER)
+                m_MirrorTimerFlags |= UNDERWATER_INWATER;
             else
-                RemoveAurasDueToSpell(liquid->SpellID);
+                m_MirrorTimerFlags &= ~UNDERWATER_INWATER;
         }
 
-        _lastLiquid = liquid;
-    }
-    else if (_lastLiquid && _lastLiquid->SpellID)
-    {
-        RemoveAurasDueToSpell(_lastLiquid->SpellID);
-        _lastLiquid = nullptr;
-    }
-
-
-    // All liquids type - check under water position
-    if (liquid_status.type_flags & (MAP_LIQUID_TYPE_WATER | MAP_LIQUID_TYPE_OCEAN | MAP_LIQUID_TYPE_MAGMA | MAP_LIQUID_TYPE_SLIME))
-    {
-        if (res & LIQUID_MAP_UNDER_WATER)
-            m_MirrorTimerFlags |= UNDERWATER_INWATER;
+        // Fatigue bar state (if not on flight path or transport)
+        if ((liquidData->type_flags & MAP_LIQUID_TYPE_DARK_WATER) && !IsInFlight() && !GetTransport())
+            m_MirrorTimerFlags |= UNDERWATER_INDARKWATER;
         else
-            m_MirrorTimerFlags &= ~UNDERWATER_INWATER;
-    }
+            m_MirrorTimerFlags &= ~UNDERWATER_INDARKWATER;
 
-    // Allow travel in dark water on taxi or transport
-    if ((liquid_status.type_flags & MAP_LIQUID_TYPE_DARK_WATER) && !IsInFlight() && !GetTransport())
-        m_MirrorTimerFlags |= UNDERWARER_INDARKWATER;
+        // Lava state (any contact)
+        if (liquidData->type_flags & MAP_LIQUID_TYPE_MAGMA)
+        {
+            if (status & MAP_LIQUID_STATUS_IN_CONTACT)
+                m_MirrorTimerFlags |= UNDERWATER_INLAVA;
+            else
+                m_MirrorTimerFlags &= ~UNDERWATER_INLAVA;
+        }
+
+        // Slime state (any contact)
+        if (liquidData->type_flags & MAP_LIQUID_TYPE_SLIME)
+        {
+            if (status & MAP_LIQUID_STATUS_IN_CONTACT)
+                m_MirrorTimerFlags |= UNDERWATER_INSLIME;
+            else
+                m_MirrorTimerFlags &= ~UNDERWATER_INSLIME;
+        }
+    }
     else
-        m_MirrorTimerFlags &= ~UNDERWARER_INDARKWATER;
-
-    // in lava check, anywhere in lava level
-    if (liquid_status.type_flags & MAP_LIQUID_TYPE_MAGMA)
-    {
-        if (res & (LIQUID_MAP_UNDER_WATER | LIQUID_MAP_IN_WATER | LIQUID_MAP_WATER_WALK))
-            m_MirrorTimerFlags |= UNDERWATER_INLAVA;
-        else
-            m_MirrorTimerFlags &= ~UNDERWATER_INLAVA;
-    }
-    // in slime check, anywhere in slime level
-    if (liquid_status.type_flags & MAP_LIQUID_TYPE_SLIME)
-    {
-        if (res & (LIQUID_MAP_UNDER_WATER | LIQUID_MAP_IN_WATER | LIQUID_MAP_WATER_WALK))
-            m_MirrorTimerFlags |= UNDERWATER_INSLIME;
-        else
-            m_MirrorTimerFlags &= ~UNDERWATER_INSLIME;
-    }
+        m_MirrorTimerFlags &= ~(UNDERWATER_INWATER | UNDERWATER_INLAVA | UNDERWATER_INSLIME | UNDERWATER_INDARKWATER);
 }
 
 void Player::SetCanParry(bool value)
@@ -28130,9 +28020,9 @@ std::string Player::GetMapAreaAndZoneString() const
     std::string zoneName = "Unknown";
     if (AreaTableEntry const* area = sAreaTableStore.LookupEntry(areaId))
     {
-        areaName = area->AreaName->Str[GetSession()->GetSessionDbcLocale()];
+        areaName = area->AreaName[GetSession()->GetSessionDbcLocale()];
         if (AreaTableEntry const* zone = sAreaTableStore.LookupEntry(area->ParentAreaID))
-            zoneName = zone->AreaName->Str[GetSession()->GetSessionDbcLocale()];
+            zoneName = zone->AreaName[GetSession()->GetSessionDbcLocale()];
     }
 
     std::ostringstream str;

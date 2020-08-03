@@ -93,7 +93,6 @@ public:
             { "kick",             rbac::RBAC_PERM_COMMAND_KICK,              true, &HandleKickPlayerCommand,       "" },
             { "linkgrave",        rbac::RBAC_PERM_COMMAND_LINKGRAVE,        false, &HandleLinkGraveCommand,        "" },
             { "listfreeze",       rbac::RBAC_PERM_COMMAND_LISTFREEZE,       false, &HandleListFreezeCommand,       "" },
-            { "maxskill",         rbac::RBAC_PERM_COMMAND_MAXSKILL,         false, &HandleMaxSkillCommand,         "" },
             { "movegens",         rbac::RBAC_PERM_COMMAND_MOVEGENS,         false, &HandleMovegensCommand,         "" },
             { "mute",             rbac::RBAC_PERM_COMMAND_MUTE,              true, &HandleMuteCommand,             "" },
             { "mutehistory",      rbac::RBAC_PERM_COMMAND_MUTEHISTORY,       true, &HandleMuteInfoCommand,         "" },
@@ -286,9 +285,9 @@ public:
         char const* unknown = handler->GetTrinityString(LANG_UNKNOWN);
 
         handler->PSendSysMessage(LANG_MAP_POSITION,
-            mapId, (mapEntry ? mapEntry->MapName->Str[handler->GetSessionDbcLocale()] : unknown),
-            zoneId, (zoneEntry ? zoneEntry->AreaName->Str[handler->GetSessionDbcLocale()] : unknown),
-            areaId, (areaEntry ? areaEntry->AreaName->Str[handler->GetSessionDbcLocale()] : unknown),
+            mapId, (mapEntry ? mapEntry->MapName[handler->GetSessionDbcLocale()] : unknown),
+            zoneId, (zoneEntry ? zoneEntry->AreaName[handler->GetSessionDbcLocale()] : unknown),
+            areaId, (areaEntry ? areaEntry->AreaName[handler->GetSessionDbcLocale()] : unknown),
             object->GetPositionX(), object->GetPositionY(), object->GetPositionZ(), object->GetOrientation());
         if (Transport* transport = object->GetTransport())
             handler->PSendSysMessage(LANG_TRANSPORT_POSITION,
@@ -299,7 +298,7 @@ public:
             zoneX, zoneY, groundZ, floorZ, haveMap, haveVMap, haveMMap);
 
         LiquidData liquidStatus;
-        ZLiquidStatus status = map->getLiquidStatus(object->GetPhaseShift(), object->GetPositionX(), object->GetPositionY(), object->GetPositionZ(), MAP_ALL_LIQUIDS, &liquidStatus);
+        ZLiquidStatus status = map->GetLiquidStatus(object->GetPhaseShift(), object->GetPositionX(), object->GetPositionY(), object->GetPositionZ(), MAP_ALL_LIQUIDS, &liquidStatus);
 
         if (status)
             handler->PSendSysMessage(LANG_LIQUID_STATUS, liquidStatus.level, liquidStatus.depth_level, liquidStatus.entry, liquidStatus.type_flags, status);
@@ -534,7 +533,7 @@ public:
                 return false;
             }
 
-            Map* map = handler->GetSession()->GetPlayer()->GetMap();
+            Map* map = _player->GetMap();
 
             if (map->IsBattlegroundOrArena())
             {
@@ -546,30 +545,35 @@ public:
                     return false;
                 }
                 // if both players are in different bgs
-                else if (target->GetBattlegroundId() && handler->GetSession()->GetPlayer()->GetBattlegroundId() != target->GetBattlegroundId())
+                else if (target->GetBattlegroundId() && _player->GetBattlegroundId() != target->GetBattlegroundId())
                     target->LeaveBattleground(false); // Note: should be changed so target gets no Deserter debuff
 
                 // all's well, set bg id
                 // when porting out from the bg, it will be reset to 0
-                target->SetBattlegroundId(handler->GetSession()->GetPlayer()->GetBattlegroundId(), handler->GetSession()->GetPlayer()->GetBattlegroundTypeId());
+                target->SetBattlegroundId(_player->GetBattlegroundId(), _player->GetBattlegroundTypeId());
                 // remember current position as entry point for return at bg end teleportation
                 if (!target->GetMap()->IsBattlegroundOrArena())
                     target->SetBattlegroundEntryPoint();
             }
-            else if (map->IsDungeon())
+            else if (map->Instanceable())
             {
-                Map* destMap = target->GetMap();
+                Group* targetGroup = target->GetGroup();
+                Map* targetMap = target->GetMap();
+                Player* targetGroupLeader = ObjectAccessor::GetPlayer(map, targetGroup->GetLeaderGUID());
 
-                if (destMap->Instanceable() && destMap->GetInstanceId() != map->GetInstanceId())
-                    target->UnbindInstance(map->GetInstanceId(), target->GetDungeonDifficultyID(), true);
+                // check if far teleport is allowed
+                if (!targetGroupLeader || (targetGroupLeader->GetMapId() != map->GetId()) || (targetGroupLeader->GetInstanceId() != map->GetInstanceId()))
+                    if ((targetMap->GetId() != map->GetId()) || (targetMap->GetInstanceId() != map->GetInstanceId()))
+                    {
+                        handler->PSendSysMessage(LANG_CANNOT_SUMMON_TO_INST);
+                        handler->SetSentErrorMessage(true);
+                        return false;
+                    }
 
-                // we are in an instance, and can only summon players in our group with us as leader
-                if (!handler->GetSession()->GetPlayer()->GetGroup() || !target->GetGroup() ||
-                    (target->GetGroup()->GetLeaderGUID() != handler->GetSession()->GetPlayer()->GetGUID()) ||
-                    (handler->GetSession()->GetPlayer()->GetGroup()->GetLeaderGUID() != handler->GetSession()->GetPlayer()->GetGUID()))
-                    // the last check is a bit excessive, but let it be, just in case
+                // check if we're already in a different instance of the same map
+                if ((targetMap->GetId() == map->GetId()) && (targetMap->GetInstanceId() != map->GetInstanceId()))
                 {
-                    handler->PSendSysMessage(LANG_CANNOT_SUMMON_TO_INST, nameLink.c_str());
+                    handler->PSendSysMessage(LANG_CANNOT_SUMMON_INST_INST, nameLink.c_str());
                     handler->SetSentErrorMessage(true);
                     return false;
                 }
@@ -591,9 +595,9 @@ public:
 
             // before GM
             float x, y, z;
-            handler->GetSession()->GetPlayer()->GetClosePoint(x, y, z, target->GetCombatReach());
-            target->TeleportTo(handler->GetSession()->GetPlayer()->GetMapId(), x, y, z, target->GetOrientation());
-            PhasingHandler::InheritPhaseShift(target, handler->GetSession()->GetPlayer());
+            _player->GetClosePoint(x, y, z, target->GetCombatReach());
+            target->TeleportTo(_player->GetMapId(), x, y, z, target->GetOrientation());
+            PhasingHandler::InheritPhaseShift(target, _player);
             target->UpdateObjectVisibility();
         }
         else
@@ -608,12 +612,12 @@ public:
 
             // in point where GM stay
             CharacterDatabaseTransaction dummy;
-            Player::SavePositionInDB(WorldLocation(handler->GetSession()->GetPlayer()->GetMapId(),
-                handler->GetSession()->GetPlayer()->GetPositionX(),
-                handler->GetSession()->GetPlayer()->GetPositionY(),
-                handler->GetSession()->GetPlayer()->GetPositionZ(),
-                handler->GetSession()->GetPlayer()->GetOrientation()),
-                handler->GetSession()->GetPlayer()->GetZoneId(),
+            Player::SavePositionInDB(WorldLocation(_player->GetMapId(),
+                _player->GetPositionX(),
+                _player->GetPositionY(),
+                _player->GetPositionZ(),
+                _player->GetOrientation()),
+                _player->GetZoneId(),
                 targetGuid, dummy);
         }
 
@@ -1270,8 +1274,8 @@ public:
                 std::string itemName = itemNameStr+1;
                 auto itr = std::find_if(sItemSparseStore.begin(), sItemSparseStore.end(), [&itemName](ItemSparseEntry const* sparse)
                 {
-                    for (uint32 i = 0; i < TOTAL_LOCALES; ++i)
-                        if (itemName == sparse->Display->Str[i])
+                    for (LocaleConstant i = LOCALE_enUS; i < TOTAL_LOCALES; i = LocaleConstant(i + 1))
+                        if (itemName == sparse->Display[i])
                             return true;
                     return false;
                 });
@@ -1498,22 +1502,6 @@ public:
         return true;
     }
 
-
-    static bool HandleMaxSkillCommand(ChatHandler* handler, char const* /*args*/)
-    {
-        Player* player = handler->getSelectedPlayerOrSelf();
-        if (!player)
-        {
-            handler->SendSysMessage(LANG_NO_CHAR_SELECTED);
-            handler->SetSentErrorMessage(true);
-            return false;
-        }
-
-        // each skills that have max skill value dependent from level seted to current level max skill value
-        player->UpdateSkillsToMaxSkillsForLevel();
-        return true;
-    }
-
     static bool HandleSetSkillCommand(ChatHandler* handler, char const* args)
     {
         // number or [name] Shift-click form |color|Hskill:skill_id|h[name]|h|r
@@ -1566,7 +1554,7 @@ public:
         // add the skill to the player's book with step 1 (which is the first rank, in most cases something
         // like 'Apprentice <skill>'.
         target->SetSkill(skill, targetHasSkill ? target->GetSkillStep(skill) : 1, level, max);
-        handler->PSendSysMessage(LANG_SET_SKILL, skill, skillLine->DisplayName->Str[handler->GetSessionDbcLocale()], handler->GetNameLink(target).c_str(), level, max);
+        handler->PSendSysMessage(LANG_SET_SKILL, skill, skillLine->DisplayName[handler->GetSessionDbcLocale()], handler->GetNameLink(target).c_str(), level, max);
         return true;
     }
 
@@ -1904,15 +1892,15 @@ public:
         AreaTableEntry const* area = sAreaTableStore.LookupEntry(areaId);
         if (area)
         {
-            areaName = area->AreaName->Str[handler->GetSessionDbcLocale()];
+            areaName = area->AreaName[handler->GetSessionDbcLocale()];
 
             AreaTableEntry const* zone = sAreaTableStore.LookupEntry(area->ParentAreaID);
             if (zone)
-                zoneName = zone->AreaName->Str[handler->GetSessionDbcLocale()];
+                zoneName = zone->AreaName[handler->GetSessionDbcLocale()];
         }
 
         if (target)
-            handler->PSendSysMessage(LANG_PINFO_CHR_MAP, map->MapName->Str[handler->GetSessionDbcLocale()],
+            handler->PSendSysMessage(LANG_PINFO_CHR_MAP, map->MapName[handler->GetSessionDbcLocale()],
                 (!zoneName.empty() ? zoneName.c_str() : handler->GetTrinityString(LANG_UNKNOWN)),
                 (!areaName.empty() ? areaName.c_str() : handler->GetTrinityString(LANG_UNKNOWN)));
 

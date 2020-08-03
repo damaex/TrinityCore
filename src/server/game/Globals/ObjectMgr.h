@@ -682,7 +682,6 @@ struct GossipMenuItems
     uint32               BoxMoney;
     std::string          BoxText;
     uint32               BoxBroadcastTextId;
-    uint32               TrainerId;
     ConditionContainer   Conditions;
 };
 
@@ -1297,7 +1296,7 @@ class TC_GAME_API ObjectMgr
 
         void LoadVendors();
         void LoadTrainers();
-        void LoadCreatureDefaultTrainers();
+        void LoadCreatureTrainers();
 
         void LoadPhases();
         void UnloadPhaseConditions();
@@ -1492,8 +1491,8 @@ class TC_GAME_API ObjectMgr
         void RemoveCreatureFromGrid(ObjectGuid::LowType guid, CreatureData const* data);
         void AddGameobjectToGrid(ObjectGuid::LowType guid, GameObjectData const* data);
         void RemoveGameobjectFromGrid(ObjectGuid::LowType guid, GameObjectData const* data);
-        ObjectGuid::LowType AddGOData(uint32 entry, uint32 map, float x, float y, float z, float o, uint32 spawntimedelay = 0, float rotation0 = 0, float rotation1 = 0, float rotation2 = 0, float rotation3 = 0);
-        ObjectGuid::LowType AddCreatureData(uint32 entry, uint32 map, float x, float y, float z, float o, uint32 spawntimedelay = 0);
+        ObjectGuid::LowType AddGOData(uint32 entry, uint32 map, Position const& pos, QuaternionData const& rot, uint32 spawntimedelay = 0);
+        ObjectGuid::LowType AddCreatureData(uint32 entry, uint32 map, Position const& pos, uint32 spawntimedelay = 0);
 
         // reserved names
         void LoadReservedPlayersNames();
@@ -1519,7 +1518,11 @@ class TC_GAME_API ObjectMgr
         bool DeleteGameTele(std::string const& name);
 
         Trainer::Trainer const* GetTrainer(uint32 trainerId) const;
-        uint32 GetCreatureDefaultTrainer(uint32 creatureId) const;
+        uint32 GetCreatureDefaultTrainer(uint32 creatureId) const
+        {
+            return GetCreatureTrainerForGossipOption(creatureId, 0, 0);
+        }
+        uint32 GetCreatureTrainerForGossipOption(uint32 creatureId, uint32 gossipMenuId, uint32 gossipOptionIndex) const;
 
         VendorItemData const* GetNpcVendorItemList(uint32 entry) const
         {
@@ -1635,7 +1638,7 @@ class TC_GAME_API ObjectMgr
         {
             auto itr = _guidGenerators.find(high);
             if (itr == _guidGenerators.end())
-                itr = _guidGenerators.insert(std::make_pair(high, Trinity::make_unique<ObjectGuidGenerator<high>>())).first;
+                itr = _guidGenerators.insert(std::make_pair(high, std::make_unique<ObjectGuidGenerator<high>>())).first;
 
             return *itr->second;
         }
@@ -1779,7 +1782,7 @@ class TC_GAME_API ObjectMgr
 
         CacheVendorItemContainer _cacheVendorItemStore;
         std::unordered_map<uint32, Trainer::Trainer> _trainers;
-        std::unordered_map<uint32, uint32> _creatureDefaultTrainers;
+        std::map<std::tuple<uint32, uint32, uint32>, uint32> _creatureDefaultTrainers;
 
         std::set<uint32> _difficultyEntries[MAX_CREATURE_DIFFICULTIES]; // already loaded difficulty 1 value in creatures, used in CheckCreatureTemplate
         std::set<uint32> _hasDifficultyEntries[MAX_CREATURE_DIFFICULTIES]; // already loaded creatures with difficulty 1 values, used in CheckCreatureTemplate
