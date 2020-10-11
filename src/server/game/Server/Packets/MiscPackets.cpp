@@ -147,11 +147,36 @@ WorldPacket const* WorldPackets::Misc::PlaySound::Write()
     return &_worldPacket;
 }
 
+WorldPacket const* WorldPackets::Misc::CrossedInebriationThreshold::Write()
+{
+    _worldPacket << Guid;
+    _worldPacket << uint32(Threshold);
+    _worldPacket << uint32(ItemID);
+
+    return &_worldPacket;
+}
+
 WorldPacket const* WorldPackets::Misc::OverrideLight::Write()
 {
     _worldPacket << int32(AreaLightID);
     _worldPacket << int32(OverrideLightID);
     _worldPacket << int32(TransitionMilliseconds);
+
+    return &_worldPacket;
+}
+
+void WorldPackets::Misc::RandomRollClient::Read()
+{
+    _worldPacket >> Min;
+    _worldPacket >> Max;
+}
+
+WorldPacket const* WorldPackets::Misc::RandomRoll::Write()
+{
+    _worldPacket << uint32(Min);
+    _worldPacket << uint32(Max);
+    _worldPacket << uint32(Result);
+    _worldPacket << Roller;
 
     return &_worldPacket;
 }
@@ -163,10 +188,54 @@ WorldPacket const* WorldPackets::Misc::UITime::Write()
     return &_worldPacket;
 }
 
+void WorldPackets::Misc::TogglePvP::Read()
+{
+    if (HasPvPStatus())
+        Enable = _worldPacket.read<uint8>() != 0;
+}
+
 void WorldPackets::Misc::WorldTeleport::Read()
 {
     _worldPacket >> Time;
     _worldPacket >> MapID;
     _worldPacket >> Pos;
     _worldPacket >> Facing;
+}
+
+WorldPacket const* WorldPackets::Misc::CorpseReclaimDelay::Write()
+{
+    _worldPacket << uint32(Remaining);
+
+    return &_worldPacket;
+}
+
+WorldPacket const* WorldPackets::Misc::DeathReleaseLoc::Write()
+{
+    _worldPacket << int32(MapID);
+    _worldPacket << Loc;
+
+    return &_worldPacket;
+}
+
+WorldPacket const* WorldPackets::Misc::PreRessurect::Write()
+{
+    _worldPacket << PlayerGUID.WriteAsPacked();
+
+    return &_worldPacket;
+}
+
+void WorldPackets::Misc::ReclaimCorpse::Read()
+{
+    _worldPacket >> CorpseGUID;
+}
+
+void WorldPackets::Misc::RepopRequest::Read()
+{
+    _worldPacket >> CheckInstance;
+}
+
+void WorldPackets::Misc::ResurrectResponse::Read()
+{
+    _worldPacket >> Resurrecter;
+    _worldPacket >> Response;
 }
