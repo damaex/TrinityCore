@@ -63,7 +63,7 @@ WorldPacket const* DBReply::Write()
 
 WorldPacket const* AvailableHotfixes::Write()
 {
-    _worldPacket << int32(HotfixCacheVersion);
+    _worldPacket << int32(VirtualRealmAddress);
     _worldPacket << uint32(HotfixCount);
     for (DB2Manager::HotfixRecord const& hotfixRecord : Hotfixes)
         _worldPacket << hotfixRecord;
@@ -85,7 +85,7 @@ void HotfixRequest::Read()
         _worldPacket >> hotfixRecord;
 }
 
-ByteBuffer& operator<<(ByteBuffer& data, HotfixResponse::HotfixData const& hotfixData)
+ByteBuffer& operator<<(ByteBuffer& data, HotfixConnect::HotfixData const& hotfixData)
 {
     data << hotfixData.Record;
     if (hotfixData.Size)
@@ -103,7 +103,7 @@ ByteBuffer& operator<<(ByteBuffer& data, HotfixResponse::HotfixData const& hotfi
     return data;
 }
 
-WorldPacket const* HotfixResponse::Write()
+WorldPacket const* HotfixConnect::Write()
 {
     _worldPacket << uint32(Hotfixes.size());
     for (HotfixData const& hotfix : Hotfixes)

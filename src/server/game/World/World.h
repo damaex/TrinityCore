@@ -216,7 +216,6 @@ enum WorldFloatConfigs
     CONFIG_ARENA_WIN_RATING_MODIFIER_2,
     CONFIG_ARENA_LOSE_RATING_MODIFIER,
     CONFIG_ARENA_MATCHMAKER_RATING_MODIFIER,
-    CONFIG_RESPAWN_DYNAMICRADIUS,
     CONFIG_RESPAWN_DYNAMICRATE_CREATURE,
     CONFIG_RESPAWN_DYNAMICRATE_GAMEOBJECT,
     FLOAT_CONFIG_VALUE_COUNT
@@ -340,7 +339,6 @@ enum WorldIntConfigs
     CONFIG_LOGDB_CLEARINTERVAL,
     CONFIG_LOGDB_CLEARTIME,
     CONFIG_CLIENTCACHE_VERSION,
-    CONFIG_HOTFIX_CACHE_VERSION,
     CONFIG_GUILD_NEWS_LOG_COUNT,
     CONFIG_GUILD_EVENT_LOG_COUNT,
     CONFIG_GUILD_BANK_EVENT_LOG_COUNT,
@@ -404,13 +402,11 @@ enum WorldIntConfigs
     CONFIG_AUCTION_SEARCH_DELAY,
     CONFIG_AUCTION_TAINTED_SEARCH_DELAY,
     CONFIG_TALENTS_INSPECTING,
-    CONFIG_RESPAWN_MINCELLCHECKMS,
+    CONFIG_RESPAWN_MINCHECKINTERVALMS,
     CONFIG_RESPAWN_DYNAMICMODE,
     CONFIG_RESPAWN_GUIDWARNLEVEL,
     CONFIG_RESPAWN_GUIDALERTLEVEL,
     CONFIG_RESPAWN_RESTARTQUIETTIME,
-    CONFIG_RESPAWN_ACTIVITYSCOPECREATURE,
-    CONFIG_RESPAWN_ACTIVITYSCOPEGAMEOBJECT,
     CONFIG_RESPAWN_DYNAMICMINIMUM_CREATURE,
     CONFIG_RESPAWN_DYNAMICMINIMUM_GAMEOBJECT,
     CONFIG_RESPAWN_GUIDWARNING_FREQUENCY,
@@ -564,13 +560,12 @@ enum WorldStates
 /// Storage class for commands issued for delayed execution
 struct TC_GAME_API CliCommandHolder
 {
-    typedef void(*Print)(void*, const char*);
+    typedef void(*Print)(void*, char const*);
     typedef void(*CommandFinished)(void*, bool success);
 
     void* m_callbackArg;
-    char *m_command;
+    char* m_command;
     Print m_print;
-
     CommandFinished m_commandFinished;
 
     CliCommandHolder(void* callbackArg, char const* command, Print zprint, CommandFinished commandFinished);
@@ -598,7 +593,7 @@ class TC_GAME_API World
         bool RemoveSession(uint32 id);
         /// Get the number of current active sessions
         void UpdateMaxSessionCounters();
-        const SessionMap& GetAllSessions() const { return m_sessions; }
+        SessionMap const& GetAllSessions() const { return m_sessions; }
         uint32 GetActiveAndQueuedSessionCount() const { return uint32(m_sessions.size()); }
         uint32 GetActiveSessionCount() const { return uint32(m_sessions.size() - m_QueuedPlayer.size()); }
         uint32 GetQueuedSessionCount() const { return uint32(m_QueuedPlayer.size()); }
@@ -677,9 +672,9 @@ class TC_GAME_API World
         void LoadConfigSettings(bool reload = false);
 
         void SendWorldText(uint32 string_id, ...);
-        void SendGlobalText(const char* text, WorldSession* self);
+        void SendGlobalText(char const* text, WorldSession* self);
         void SendGMText(uint32 string_id, ...);
-        void SendServerMessage(ServerMessageType messageID, std::string stringParam = "", Player* player = NULL);
+        void SendServerMessage(ServerMessageType messageID, std::string stringParam = "", Player* player = nullptr);
         void SendGlobalMessage(WorldPacket const* packet, WorldSession* self = nullptr, uint32 team = 0);
         void SendGlobalGMMessage(WorldPacket const* packet, WorldSession* self = nullptr, uint32 team = 0);
         bool SendZoneMessage(uint32 zone, WorldPacket const* packet, WorldSession* self = nullptr, uint32 team = 0);
@@ -690,7 +685,7 @@ class TC_GAME_API World
         uint32 GetShutDownTimeLeft() const { return m_ShutdownTimer; }
         void ShutdownServ(uint32 time, uint32 options, uint8 exitcode, const std::string& reason = std::string());
         uint32 ShutdownCancel();
-        void ShutdownMsg(bool show = false, Player* player = NULL, const std::string& reason = std::string());
+        void ShutdownMsg(bool show = false, Player* player = nullptr, const std::string& reason = std::string());
         static uint8 GetExitCode() { return m_ExitCode; }
         static void StopNow(uint8 exitcode) { m_stopEvent = true; m_ExitCode = exitcode; }
         static bool IsStopped() { return m_stopEvent; }
@@ -796,6 +791,10 @@ class TC_GAME_API World
         void ReloadRBAC();
 
         void RemoveOldCorpses();
+        void TriggerGuidWarning();
+        void TriggerGuidAlert();
+        bool IsGuidWarning() { return _guidWarn; }
+        bool IsGuidAlert() { return _guidAlert; }
 
     protected:
         void _UpdateGameTime();
@@ -900,7 +899,21 @@ class TC_GAME_API World
         AutobroadcastContainer m_Autobroadcasts;
 
         void ProcessQueryCallbacks();
+
+        void SendGuidWarning();
+        void DoGuidWarningRestart();
+        void DoGuidAlertRestart();
         QueryCallbackProcessor _queryProcessor;
+
+        std::string _guidWarningMsg;
+        std::string _alertRestartReason;
+
+        std::mutex _guidAlertLock;
+
+        bool _guidWarn;
+        bool _guidAlert;
+        uint32 _warnDiff;
+        time_t _warnShutdownTime;
 };
 
 TC_GAME_API extern Realm realm;
